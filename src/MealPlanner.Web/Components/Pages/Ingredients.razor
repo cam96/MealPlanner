@@ -1,0 +1,200 @@
+@page "/ingredients"
+@using MealPlanner.Contracts
+@using MealPlanner.Web.Components.Dialogs
+@inject MealPlannerApiClient Api
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Ingredients - MealPlanner</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
+    <MudText Typo="Typo.h4">Ingredients</MudText>
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="@(() => OpenEditorAsync(null))">
+        Add ingredient
+    </MudButton>
+</MudStack>
+
+<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+    Nutrition is stored per 100 g/ml. Estimated values are flagged so you know what to double-check.
+</MudText>
+
+<MudDataGrid T="IngredientDto"
+             Items="_ingredients"
+             Loading="_loading"
+             Hover="true"
+             Filterable="true"
+             QuickFilter="QuickFilter"
+             Elevation="1">
+    <ToolBarContent>
+        <MudTextField @bind-Value="_search"
+                      Placeholder="Search ingredients"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true"
+                      Class="mt-0" />
+    </ToolBarContent>
+    <Columns>
+        <TemplateColumn Title="Name" SortBy="i => i.Name">
+            <CellTemplate>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                    <MudText>@context.Item.Name</MudText>
+                    @if (context.Item.IsNutritionEstimated)
+                    {
+                        <MudTooltip Text="Nutrition is estimated">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">est.</MudChip>
+                        </MudTooltip>
+                    }
+                </MudStack>
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Category" SortBy="i => i.Category">
+            <CellTemplate>
+                @if (context.Item.Category != FoodCategory.None)
+                {
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Variant="Variant.Outlined"
+                             Color="@CategoryColor(context.Item.Category)">
+                        @CategoryLabel(context.Item.Category)
+                    </MudChip>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">—</MudText>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="i => i.BaseUnit" Title="Unit" />
+        <PropertyColumn Property="i => i.CaloriesPer100" Title="kcal/100" />
+        <PropertyColumn Property="i => i.ProteinPer100" Title="Protein/100" />
+        <PropertyColumn Property="i => i.FiberPer100" Title="Fibre/100" />
+        <PropertyColumn Property="i => i.CarbsPer100" Title="Carbs/100" />
+        <PropertyColumn Property="i => i.FatPer100" Title="Fat/100" />
+        <TemplateColumn CellClass="d-flex justify-end" Title="Actions" Sortable="false">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                               Size="Size.Small"
+                               OnClick="@(() => OpenEditorAsync(context.Item))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                               Size="Size.Small"
+                               Color="Color.Error"
+                               OnClick="@(() => DeleteAsync(context.Item))" />
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent>
+        @if (_ingredients.Count > 0 && !string.IsNullOrWhiteSpace(_search))
+        {
+            <MudText Class="pa-4">No ingredients match your search.</MudText>
+        }
+        else
+        {
+            <MudText Class="pa-4">No ingredients yet. Add the foods you cook with.</MudText>
+        }
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private IReadOnlyList<IngredientDto> _ingredients = [];
+    private bool _loading = true;
+    private string _search = string.Empty;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private bool QuickFilter(IngredientDto ingredient) =>
+        string.IsNullOrWhiteSpace(_search)
+        || ingredient.Name.Contains(_search, StringComparison.OrdinalIgnoreCase);
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _ingredients = await Api.GetIngredientsAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenEditorAsync(IngredientDto? existing)
+    {
+        var parameters = new DialogParameters<IngredientDialog> { { x => x.Existing, existing } };
+        var title = existing is null ? "Add ingredient" : "Edit ingredient";
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<IngredientDialog>(title, parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not SaveIngredientRequest request)
+        {
+            return;
+        }
+
+        try
+        {
+            if (existing is null)
+            {
+                await Api.CreateIngredientAsync(request);
+                Snackbar.Add($"Added {request.Name}.", Severity.Success);
+            }
+            else
+            {
+                await Api.UpdateIngredientAsync(existing.Id, request);
+                Snackbar.Add($"Updated {request.Name}.", Severity.Success);
+            }
+
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not save the ingredient. Is the API running?", Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync(IngredientDto ingredient)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Delete ingredient",
+            MarkupMessage = new MarkupString($"Remove {ingredient.Name}? Its recorded prices will be removed too."),
+            YesText = "Delete",
+            CancelText = "Cancel",
+        });
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.DeleteIngredientAsync(ingredient.Id);
+            Snackbar.Add($"Deleted {ingredient.Name}.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not delete the ingredient.", Severity.Error);
+        }
+    }
+
+    private static string CategoryLabel(FoodCategory category) => category switch
+    {
+        FoodCategory.Protein => "Protein",
+        FoodCategory.Carbohydrate => "Carbohydrate",
+        FoodCategory.Vegetable => "Vegetable",
+        _ => "None",
+    };
+
+    private static Color CategoryColor(FoodCategory category) => category switch
+    {
+        FoodCategory.Protein => Color.Error,
+        FoodCategory.Carbohydrate => Color.Warning,
+        FoodCategory.Vegetable => Color.Success,
+        _ => Color.Default,
+    };
+}

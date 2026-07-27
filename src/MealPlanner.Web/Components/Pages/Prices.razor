@@ -1,0 +1,235 @@
+@page "/prices"
+@using MealPlanner.Web.Components.Dialogs
+@inject MealPlannerApiClient Api
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Prices - MealPlanner</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">Prices</MudText>
+<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+    Record what ingredients cost at each store. Estimated prices are flagged.
+</MudText>
+
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudAutocomplete T="IngredientDto"
+                     Label="Ingredient"
+                     Value="_selected"
+                     ValueChanged="OnIngredientChangedAsync"
+                     SearchFunc="SearchIngredientsAsync"
+                     ToStringFunc="i => i?.Name ?? string.Empty"
+                     ResetValueOnEmptyText="true"
+                     Clearable="true"
+                     Adornment="Adornment.Start"
+                     AdornmentIcon="@Icons.Material.Filled.Search" />
+</MudPaper>
+
+@if (_selected is null)
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+        Pick an ingredient above to see or record its prices.
+    </MudText>
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
+        <MudText Typo="Typo.h6">Prices for @_selected.Name</MudText>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => OpenEditorAsync(null))">
+            Record price
+        </MudButton>
+    </MudStack>
+
+    <MudDataGrid T="IngredientPriceDto"
+                 Items="_prices"
+                 Loading="_loading"
+                 Hover="true"
+                 Elevation="1">
+        <Columns>
+            <PropertyColumn Property="p => p.RecordedDate" Title="Date" />
+            <PropertyColumn Property="p => p.StoreName" Title="Store" />
+            <TemplateColumn Title="Price" SortBy="p => p.Price">
+                <CellTemplate>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudText>@context.Item.Price.ToString("C2")</MudText>
+                        @if (context.Item.IsEstimated)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">est.</MudChip>
+                        }
+                    </MudStack>
+                </CellTemplate>
+            </TemplateColumn>
+            <TemplateColumn Title="Package" Sortable="false">
+                <CellTemplate>
+                    @context.Item.PackageQuantity @UnitLabel(context.Item.PackageUnit)
+                </CellTemplate>
+            </TemplateColumn>
+            <TemplateColumn Title="Preferred" Sortable="false">
+                <CellTemplate>
+                    @if (context.Item.IsPreferredStore)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Primary" Size="Size.Small" />
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+            <TemplateColumn CellClass="d-flex justify-end" Title="Actions" Sortable="false">
+                <CellTemplate>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Size="Size.Small"
+                                   OnClick="@(() => OpenEditorAsync(context.Item))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Size="Size.Small"
+                                   Color="Color.Error"
+                                   OnClick="@(() => DeleteAsync(context.Item))" />
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+        <NoRecordsContent>
+            <MudText Class="pa-4">No prices recorded for this ingredient yet.</MudText>
+        </NoRecordsContent>
+    </MudDataGrid>
+}
+
+@code {
+    private IReadOnlyList<IngredientDto> _ingredients = [];
+    private IReadOnlyList<StoreDto> _stores = [];
+    private IReadOnlyList<IngredientPriceDto> _prices = [];
+    private IngredientDto? _selected;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _ingredients = await Api.GetIngredientsAsync();
+        _stores = await Api.GetStoresAsync();
+    }
+
+    private Task<IEnumerable<IngredientDto>> SearchIngredientsAsync(string? value, CancellationToken token)
+    {
+        var matches = string.IsNullOrWhiteSpace(value)
+            ? _ingredients
+            : _ingredients.Where(i => i.Name.Contains(value, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        return Task.FromResult<IEnumerable<IngredientDto>>(matches);
+    }
+
+    private async Task OnIngredientChangedAsync(IngredientDto? ingredient)
+    {
+        _selected = ingredient;
+        if (ingredient is not null)
+        {
+            await ReloadPricesAsync();
+        }
+        else
+        {
+            _prices = [];
+        }
+    }
+
+    private async Task ReloadPricesAsync()
+    {
+        if (_selected is null)
+        {
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            _prices = await Api.GetPricesAsync(_selected.Id);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenEditorAsync(IngredientPriceDto? existing)
+    {
+        if (_selected is null)
+        {
+            return;
+        }
+
+        if (_stores.Count == 0)
+        {
+            Snackbar.Add("Add a store under Settings before recording prices.", Severity.Info);
+            return;
+        }
+
+        var parameters = new DialogParameters<PriceDialog>
+        {
+            { x => x.Existing, existing },
+            { x => x.Stores, _stores },
+        };
+        var title = existing is null ? "Record price" : "Edit price";
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<PriceDialog>(title, parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not SaveIngredientPriceRequest request)
+        {
+            return;
+        }
+
+        try
+        {
+            if (existing is null)
+            {
+                await Api.CreatePriceAsync(_selected.Id, request);
+                Snackbar.Add("Price recorded.", Severity.Success);
+            }
+            else
+            {
+                await Api.UpdatePriceAsync(_selected.Id, existing.Id, request);
+                Snackbar.Add("Price updated.", Severity.Success);
+            }
+
+            await ReloadPricesAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not save the price. Is the API running?", Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync(IngredientPriceDto price)
+    {
+        if (_selected is null)
+        {
+            return;
+        }
+
+        var confirmed = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Delete price",
+            MarkupMessage = new MarkupString($"Remove the {price.Price.ToString("C2")} price from {price.StoreName}?"),
+            YesText = "Delete",
+            CancelText = "Cancel",
+        });
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.DeletePriceAsync(_selected.Id, price.Id);
+            Snackbar.Add("Price deleted.", Severity.Success);
+            await ReloadPricesAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not delete the price.", Severity.Error);
+        }
+    }
+
+    private static string UnitLabel(MeasurementUnit unit) => unit switch
+    {
+        MeasurementUnit.Millilitre => "ml",
+        MeasurementUnit.Each => "each",
+        _ => "g",
+    };
+}

@@ -1,0 +1,103 @@
+@using MealPlanner.Contracts.People
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudTextField @bind-Value="_model.Name"
+                          Label="Name"
+                          Required="true"
+                          RequiredError="Name is required."
+                          MaxLength="100" />
+            <MudNumericField @bind-Value="_model.DailyCalorieGoal"
+                             Label="Daily calories (kcal)"
+                             Min="0"
+                             Class="mt-3" />
+            <MudNumericField @bind-Value="_model.DailyProteinGoal"
+                             Label="Daily protein (g)"
+                             Min="0"
+                             Class="mt-3" />
+            <MudNumericField @bind-Value="_model.DailyFiberGoal"
+                             Label="Daily fibre (g)"
+                             Min="0"
+                             Class="mt-3" />
+            <MudNumericField @bind-Value="_model.DailyCarbGoal"
+                             Label="Daily carbs (g)"
+                             Min="0"
+                             Class="mt-3" />
+            <MudNumericField @bind-Value="_model.DailyFatGoal"
+                             Label="Daily fat (g)"
+                             Min="0"
+                             Class="mt-3" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private PersonEditModel _model = new();
+
+    /// <summary>The dialog instance used to return a result.</summary>
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The person to edit, or <see langword="null"/> to create a new one.</summary>
+    [Parameter]
+    public PersonDto? Existing { get; set; }
+
+    /// <inheritdoc />
+    protected override void OnParametersSet()
+    {
+        if (Existing is { } person)
+        {
+            _model = new PersonEditModel
+            {
+                Name = person.Name,
+                DailyCalorieGoal = person.DailyCalorieGoal,
+                DailyProteinGoal = person.DailyProteinGoal,
+                DailyFiberGoal = person.DailyFiberGoal,
+                DailyCarbGoal = person.DailyCarbGoal,
+                DailyFatGoal = person.DailyFatGoal,
+            };
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        var request = new SavePersonRequest(
+            _model.Name.Trim(),
+            _model.DailyCalorieGoal,
+            _model.DailyProteinGoal,
+            _model.DailyFiberGoal,
+            _model.DailyCarbGoal,
+            _model.DailyFatGoal);
+
+        MudDialog.Close(DialogResult.Ok(request));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private sealed class PersonEditModel
+    {
+        public string Name { get; set; } = string.Empty;
+
+        public int DailyCalorieGoal { get; set; } = 2000;
+
+        public int DailyProteinGoal { get; set; } = 100;
+
+        public int DailyFiberGoal { get; set; } = 30;
+
+        public int DailyCarbGoal { get; set; } = 250;
+
+        public int DailyFatGoal { get; set; } = 70;
+    }
+}

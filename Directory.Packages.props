@@ -1,0 +1,53 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ASP.NET Core / API -->
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+
+    <!-- UI -->
+    <PackageVersion Include="MudBlazor" Version="9.7.0" />
+
+    <!-- Entity Framework Core (SQLite) -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
+
+    <!-- Aspire ServiceDefaults dependencies -->
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.8.0" />
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.8.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.17.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.17.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.17.0" />
+
+    <!-- Testing -->
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.0" />
+    <PackageVersion Include="NUnit" Version="4.3.2" />
+    <PackageVersion Include="NUnit.Analyzers" Version="4.7.0" />
+    <PackageVersion Include="NUnit3TestAdapter" Version="5.0.0" />
+  </ItemGroup>
+
+  <!--
+    Security pins for TRANSITIVE dependencies (CentralPackageTransitivePinningEnabled=true).
+    These override vulnerable versions pulled in by the .NET 10 EF Core / OpenAPI packages.
+    Revisit and remove once the parent packages reference patched versions directly.
+  -->
+  <ItemGroup>
+    <!-- GHSA-v5pm-xwqc-g5wc (CVE-2026-49451): pulled in by Microsoft.AspNetCore.OpenApi;
+         2.7.5 is the patched release on the 2.x line. -->
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
+
+    <!-- GHSA-2m69-gcr7-jv3q (CVE-2025-6965): SQLite < 3.50.2 memory corruption; pulled in by
+         Microsoft.EntityFrameworkCore.Sqlite. The 3.0.x bundle ships a patched native SQLite. -->
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.4" />
+    <PackageVersion Include="SQLitePCLRaw.core" Version="3.0.4" />
+    <PackageVersion Include="SQLitePCLRaw.provider.e_sqlite3" Version="3.0.4" />
+  </ItemGroup>
+
+</Project>

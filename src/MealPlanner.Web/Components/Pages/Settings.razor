@@ -1,0 +1,186 @@
+@page "/settings"
+@using System.Globalization
+@using MealPlanner.Web.Components.Dialogs
+@inject MealPlannerApiClient Api
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Settings - MealPlanner</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">Settings</MudText>
+
+<MudText Typo="Typo.h5" Class="mb-2">Budget</MudText>
+<MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
+    Your monthly grocery budget. The shopping list compares its estimated total against this amount.
+</MudText>
+<MudPaper Class="pa-4 mb-6" Elevation="1">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+        <MudNumericField T="decimal"
+                         @bind-Value="_monthlyBudget"
+                         Label="Monthly budget"
+                         Min="0"
+                         Format="F2"
+                         Culture="Culture"
+                         Adornment="Adornment.Start"
+                         AdornmentText="$"
+                         Style="max-width: 220px;" />
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="SaveBudgetAsync"
+                   Disabled="_savingBudget">
+            Save budget
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
+    <MudText Typo="Typo.h5">Stores</MudText>
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.AddBusiness"
+               OnClick="@(() => OpenEditorAsync(null))">
+        Add store
+    </MudButton>
+</MudStack>
+
+<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+    Stores you shop at. Prices are recorded per store so the app can pick the cheapest place to buy.
+</MudText>
+
+<MudDataGrid T="StoreDto"
+             Items="_stores"
+             Loading="_loading"
+             Hover="true"
+             Elevation="1">
+    <Columns>
+        <PropertyColumn Property="s => s.Name" Title="Name" />
+        <TemplateColumn CellClass="d-flex justify-end" Title="Actions" Sortable="false">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                               Size="Size.Small"
+                               OnClick="@(() => OpenEditorAsync(context.Item))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                               Size="Size.Small"
+                               Color="Color.Error"
+                               OnClick="@(() => DeleteAsync(context.Item))" />
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent>
+        <MudText Class="pa-4">No stores yet.</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("en-CA");
+
+    private IReadOnlyList<StoreDto> _stores = [];
+    private bool _loading = true;
+    private decimal _monthlyBudget;
+    private bool _savingBudget;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var settings = await Api.GetSettingsAsync();
+        _monthlyBudget = settings.MonthlyBudget;
+        await ReloadAsync();
+    }
+
+    private async Task SaveBudgetAsync()
+    {
+        _savingBudget = true;
+        try
+        {
+            await Api.UpdateSettingsAsync(new SaveSettingsRequest(_monthlyBudget));
+            Snackbar.Add("Saved budget.", Severity.Success);
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not save the budget. Is the API running?", Severity.Error);
+        }
+        finally
+        {
+            _savingBudget = false;
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _stores = await Api.GetStoresAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenEditorAsync(StoreDto? existing)
+    {
+        var parameters = new DialogParameters<StoreDialog> { { x => x.Existing, existing } };
+        var title = existing is null ? "Add store" : "Edit store";
+        var dialog = await DialogService.ShowAsync<StoreDialog>(title, parameters);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not SaveStoreRequest request)
+        {
+            return;
+        }
+
+        try
+        {
+            if (existing is null)
+            {
+                await Api.CreateStoreAsync(request);
+                Snackbar.Add($"Added {request.Name}.", Severity.Success);
+            }
+            else
+            {
+                await Api.UpdateStoreAsync(existing.Id, request);
+                Snackbar.Add($"Updated {request.Name}.", Severity.Success);
+            }
+
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not save the store. Is the API running?", Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync(StoreDto store)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Delete store",
+            MarkupMessage = new MarkupString($"Remove {store.Name}?"),
+            YesText = "Delete",
+            CancelText = "Cancel",
+        });
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var deleted = await Api.DeleteStoreAsync(store.Id);
+            if (deleted)
+            {
+                Snackbar.Add($"Deleted {store.Name}.", Severity.Success);
+                await ReloadAsync();
+            }
+            else
+            {
+                Snackbar.Add($"Can't delete {store.Name} — it has recorded prices.", Severity.Warning);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not delete the store.", Severity.Error);
+        }
+    }
+}

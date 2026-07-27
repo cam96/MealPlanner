@@ -1,0 +1,360 @@
+@page "/categories"
+@using MealPlanner.Contracts.Combos
+@using MealPlanner.Web.Components.Dialogs
+@inject MealPlannerApiClient Api
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Meal categories - MealPlanner</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-1">Meal categories</MudText>
+<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+    Sort your foods into protein, carbohydrate and vegetable. Foods in a column are interchangeable —
+    pick one from each to build a quick dinner. What you already have on hand is shown beside each food.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-4" />
+}
+else
+{
+    <MudGrid>
+        @RenderColumn("Protein", FoodCategory.Protein, _board.Protein, Color.Error, Icons.Material.Filled.SetMeal)
+        @RenderColumn("Carbohydrate", FoodCategory.Carbohydrate, _board.Carbohydrate, Color.Warning, Icons.Material.Filled.RiceBowl)
+        @RenderColumn("Vegetable", FoodCategory.Vegetable, _board.Vegetable, Color.Success, Icons.Material.Filled.Grass)
+    </MudGrid>
+
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mt-8 mb-3">
+        <MudText Typo="Typo.h5">Saved combos</MudText>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => OpenComboAsync(null))">
+            Build a combo
+        </MudButton>
+    </MudStack>
+
+    @if (_combos.Count == 0)
+    {
+        <MudText Class="mud-text-secondary">No combos yet. Combine one food from each column into a meal.</MudText>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var combo in _combos)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="1">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.subtitle1">@combo.Name</MudText>
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                               Size="Size.Small"
+                                               OnClick="@(() => OpenComboAsync(combo))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Size="Size.Small"
+                                               Color="Color.Error"
+                                               OnClick="@(() => DeleteComboAsync(combo))" />
+                            </CardHeaderActions>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            @ComboLine("Protein", combo.ProteinIngredientName)
+                            @ComboLine("Carb", combo.CarbohydrateIngredientName)
+                            @ComboLine("Veg", combo.VegetableIngredientName)
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+}
+
+@code {
+    private CategoryBoardDto _board = new([], [], []);
+    private IReadOnlyList<MealComboDto> _combos = [];
+    private IReadOnlyList<IngredientDto> _ingredients = [];
+    private bool _loading = true;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _board = await Api.GetCategoryBoardAsync();
+            _combos = await Api.GetCombosAsync();
+            _ingredients = await Api.GetIngredientsAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not load categories. Is the API running?", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private RenderFragment RenderColumn(
+        string title,
+        FoodCategory category,
+        IReadOnlyList<CategoryIngredientDto> items,
+        Color color,
+        string icon) => __builder =>
+    {
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="1" Class="pa-3" Style="height: 100%;">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudIcon Icon="@icon" Color="@color" />
+                        <MudText Typo="Typo.h6">@title</MudText>
+                    </MudStack>
+                    <MudTooltip Text="@($"Add a {title.ToLowerInvariant()}")">
+                        <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                       Color="@color"
+                                       OnClick="@(() => OpenAssignAsync(category))" />
+                    </MudTooltip>
+                </MudStack>
+
+                @if (items.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Nothing here yet.</MudText>
+                }
+                else
+                {
+                    <MudList T="string" Dense="true">
+                        @foreach (var item in items)
+                        {
+                            <MudListItem T="string">
+                                <div class="d-flex align-center justify-space-between" style="width: 100%;">
+                                    <div>
+                                        <MudText>@item.Name</MudText>
+                                        <div class="d-flex flex-wrap" style="gap: 4px; margin-top: 2px;">
+                                            @if (item.Stock.Count == 0)
+                                            {
+                                                <MudText Typo="Typo.caption" Class="mud-text-secondary">Not on hand</MudText>
+                                            }
+                                            else
+                                            {
+                                                @foreach (var stock in item.Stock)
+                                                {
+                                                    <MudChip T="string"
+                                                             Size="Size.Small"
+                                                             Variant="Variant.Outlined"
+                                                             Color="@StockColor(stock.Location)"
+                                                             Icon="@StockIcon(stock.Location)"
+                                                             Class="ma-0">
+                                                        @FormatStock(stock)
+                                                    </MudChip>
+                                                }
+                                            }
+                                        </div>
+                                    </div>
+                                    <MudTooltip Text="Remove from this category">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => RemoveAsync(item))" />
+                                    </MudTooltip>
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudPaper>
+        </MudItem>
+    };
+
+    private static RenderFragment ComboLine(string label, string? name) => __builder =>
+    {
+        <MudText Typo="Typo.body2">
+            <b>@label:</b> @(string.IsNullOrWhiteSpace(name) ? "—" : name)
+        </MudText>
+    };
+
+    private async Task OpenAssignAsync(FoodCategory category)
+    {
+        var candidates = _ingredients.Where(i => i.Category != category).ToList();
+        var parameters = new DialogParameters<AssignCategoryDialog>
+        {
+            { x => x.Category, category },
+            { x => x.Ingredients, candidates },
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<AssignCategoryDialog>("Add to category", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not AssignCategoryDialog.Selection selection)
+        {
+            return;
+        }
+
+        if (selection.CreateNew)
+        {
+            await CreateIngredientInCategoryAsync(category);
+            return;
+        }
+
+        if (selection.Existing is not { } ingredient)
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.SetIngredientCategoryAsync(ingredient.Id, category);
+            Snackbar.Add($"Added {ingredient.Name}.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not update the ingredient.", Severity.Error);
+        }
+    }
+
+    private async Task CreateIngredientInCategoryAsync(FoodCategory category)
+    {
+        var parameters = new DialogParameters<IngredientDialog> { { x => x.DefaultCategory, category } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<IngredientDialog>("Add ingredient", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not SaveIngredientRequest request)
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.CreateIngredientAsync(request);
+            Snackbar.Add($"Added {request.Name}.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not save the ingredient. Is the API running?", Severity.Error);
+        }
+    }
+
+    private async Task RemoveAsync(CategoryIngredientDto item)
+    {
+        try
+        {
+            await Api.SetIngredientCategoryAsync(item.IngredientId, FoodCategory.None);
+            Snackbar.Add($"Removed {item.Name}.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not update the ingredient.", Severity.Error);
+        }
+    }
+
+    private async Task OpenComboAsync(MealComboDto? existing)
+    {
+        var parameters = new DialogParameters<MealComboDialog>
+        {
+            { x => x.Existing, existing },
+            { x => x.Proteins, _board.Protein },
+            { x => x.Carbohydrates, _board.Carbohydrate },
+            { x => x.Vegetables, _board.Vegetable },
+        };
+        var title = existing is null ? "Build a combo" : "Edit combo";
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<MealComboDialog>(title, parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not SaveMealComboRequest request)
+        {
+            return;
+        }
+
+        try
+        {
+            if (existing is null)
+            {
+                await Api.CreateComboAsync(request);
+                Snackbar.Add($"Saved {request.Name}.", Severity.Success);
+            }
+            else
+            {
+                await Api.UpdateComboAsync(existing.Id, request);
+                Snackbar.Add($"Updated {request.Name}.", Severity.Success);
+            }
+
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not save the combo.", Severity.Error);
+        }
+    }
+
+    private async Task DeleteComboAsync(MealComboDto combo)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Delete combo",
+            MarkupMessage = new MarkupString($"Delete the combo \"{combo.Name}\"?"),
+            YesText = "Delete",
+            CancelText = "Cancel",
+        });
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        try
+        {
+            if (await Api.DeleteComboAsync(combo.Id))
+            {
+                Snackbar.Add($"Deleted {combo.Name}.", Severity.Success);
+                await ReloadAsync();
+            }
+            else
+            {
+                Snackbar.Add("This combo is used in a meal plan and can't be deleted.", Severity.Warning);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not delete the combo.", Severity.Error);
+        }
+    }
+
+    private static Color StockColor(StorageLocation location) => location switch
+    {
+        StorageLocation.Freezer => Color.Info,
+        StorageLocation.Fridge => Color.Primary,
+        _ => Color.Default,
+    };
+
+    private static string StockIcon(StorageLocation location) => location switch
+    {
+        StorageLocation.Freezer => Icons.Material.Filled.AcUnit,
+        StorageLocation.Fridge => Icons.Material.Filled.Kitchen,
+        _ => Icons.Material.Filled.Inventory2,
+    };
+
+    private static string FormatStock(CategoryStockDto stock) =>
+        $"{LocationLabel(stock.Location)}: {stock.QuantityOnHand:0.##} {UnitLabel(stock.Unit)}";
+
+    private static string LocationLabel(StorageLocation location) => location switch
+    {
+        StorageLocation.Freezer => "Freezer",
+        StorageLocation.Fridge => "Fridge",
+        _ => "Pantry",
+    };
+
+    private static string UnitLabel(MeasurementUnit unit) => unit switch
+    {
+        MeasurementUnit.Millilitre => "ml",
+        MeasurementUnit.Each => "each",
+        _ => "g",
+    };
+}

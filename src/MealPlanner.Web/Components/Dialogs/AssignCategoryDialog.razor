@@ -1,0 +1,126 @@
+@using MealPlanner.Contracts.Ingredients
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
+            Pick an ingredient to add to the <b>@CategoryLabel</b> column. This sets the ingredient's
+            meal category.
+        </MudText>
+        <MudForm @ref="_form" Model="_model">
+            <MudAutocomplete T="IngredientDto"
+                             Label="Ingredient"
+                             @bind-Value="_model.Ingredient"
+                             SearchFunc="SearchIngredientsAsync"
+                             ToStringFunc="i => i?.Name ?? string.Empty"
+                             ResetValueOnEmptyText="true"
+                             Required="true"
+                             RequiredError="Choose an ingredient."
+                             Clearable="true"
+                             Adornment="Adornment.Start"
+                             AdornmentIcon="@Icons.Material.Filled.Search">
+                <ItemTemplate Context="item">
+                    <div class="d-flex align-center justify-space-between" style="width: 100%;">
+                        <MudText>@item.Name</MudText>
+                        @if (item.Category != FoodCategory.None)
+                        {
+                            <MudChip T="string"
+                                     Size="Size.Small"
+                                     Variant="Variant.Outlined"
+                                     Color="@CategoryColor(item.Category)"
+                                     Class="ma-0">
+                                @CategoryTag(item.Category)
+                            </MudChip>
+                        }
+                    </div>
+                </ItemTemplate>
+            </MudAutocomplete>
+        </MudForm>
+        <MudText Typo="Typo.caption" Class="mt-2 mud-text-secondary">
+            Foods already tagged for another column show that tag — picking one moves it here. Need
+            something new? Use <b>New ingredient</b> to create it straight into this column.
+        </MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="CreateNew">New ingredient</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync">Add</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private AssignModel _model = new();
+
+    /// <summary>The dialog instance used to return a result.</summary>
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The category the chosen ingredient will be added to.</summary>
+    [Parameter]
+    public FoodCategory Category { get; set; }
+
+    /// <summary>
+    /// The ingredients available to choose from. Foods already in <em>this</em> category are excluded;
+    /// foods tagged for another column are shown (with their current tag) and picking one moves it here.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<IngredientDto> Ingredients { get; set; } = [];
+
+    private string CategoryLabel => Category switch
+    {
+        FoodCategory.Protein => "protein",
+        FoodCategory.Carbohydrate => "carbohydrate",
+        FoodCategory.Vegetable => "vegetable",
+        _ => "category",
+    };
+
+    private static string CategoryTag(FoodCategory category) => category switch
+    {
+        FoodCategory.Protein => "Protein",
+        FoodCategory.Carbohydrate => "Carbohydrate",
+        FoodCategory.Vegetable => "Vegetable",
+        _ => "None",
+    };
+
+    private static Color CategoryColor(FoodCategory category) => category switch
+    {
+        FoodCategory.Protein => Color.Error,
+        FoodCategory.Carbohydrate => Color.Warning,
+        FoodCategory.Vegetable => Color.Success,
+        _ => Color.Default,
+    };
+
+    private Task<IEnumerable<IngredientDto>> SearchIngredientsAsync(string? value, CancellationToken token)
+    {
+        var matches = string.IsNullOrWhiteSpace(value)
+            ? Ingredients
+            : Ingredients.Where(i => i.Name.Contains(value, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        return Task.FromResult<IEnumerable<IngredientDto>>(matches);
+    }
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid || _model.Ingredient is null)
+        {
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(new Selection(_model.Ingredient, false)));
+    }
+
+    private void CreateNew() => MudDialog.Close(DialogResult.Ok(new Selection(null, true)));
+
+    private void Cancel() => MudDialog.Cancel();
+
+    /// <summary>The outcome of the add-to-category dialog.</summary>
+    /// <param name="Existing">The existing ingredient to move into the category, if one was chosen.</param>
+    /// <param name="CreateNew">Whether the user chose to create a brand-new ingredient instead.</param>
+    public sealed record Selection(IngredientDto? Existing, bool CreateNew);
+
+    private sealed class AssignModel
+    {
+        public IngredientDto? Ingredient { get; set; }
+    }
+}

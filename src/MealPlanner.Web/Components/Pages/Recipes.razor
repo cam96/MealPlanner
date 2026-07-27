@@ -1,0 +1,148 @@
+@page "/recipes"
+@inject MealPlannerApiClient Api
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Recipes - MealPlanner</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
+    <MudText Typo="Typo.h4">Recipes</MudText>
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="@(() => Navigation.NavigateTo("/recipes/new"))">
+        Add recipe
+    </MudButton>
+</MudStack>
+
+<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+    Nutrition and cost are calculated per serving from ingredient prices. Estimated figures are flagged.
+</MudText>
+
+<MudDataGrid T="RecipeSummaryDto"
+             Items="_recipes"
+             Loading="_loading"
+             Hover="true"
+             Filterable="true"
+             QuickFilter="QuickFilter"
+             Elevation="1">
+    <ToolBarContent>
+        <MudTextField @bind-Value="_search"
+                      Placeholder="Search recipes"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true"
+                      Class="mt-0" />
+    </ToolBarContent>
+    <Columns>
+        <PropertyColumn Property="r => r.Name" Title="Name" />
+        <PropertyColumn Property="r => r.MealType" Title="Meal" />
+        <TemplateColumn Title="Time" SortBy="r => r.PrepMinutes + r.CookMinutes">
+            <CellTemplate>@(context.Item.PrepMinutes + context.Item.CookMinutes) min</CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="r => r.Servings" Title="Servings" />
+        <TemplateColumn Title="kcal/serving" SortBy="r => r.CaloriesPerServing">
+            <CellTemplate>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                    <MudText>@context.Item.CaloriesPerServing.ToString("0")</MudText>
+                    @if (context.Item.NutritionIsEstimated)
+                    {
+                        <MudTooltip Text="Nutrition is estimated">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">est.</MudChip>
+                        </MudTooltip>
+                    }
+                </MudStack>
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Protein/serving" SortBy="r => r.ProteinPerServing">
+            <CellTemplate>@context.Item.ProteinPerServing.ToString("0.0") g</CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Cost/serving" SortBy="r => r.CostPerServing">
+            <CellTemplate>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                    <MudText>@context.Item.CostPerServing.ToString("C2")</MudText>
+                    @if (context.Item.CostIsEstimated)
+                    {
+                        <MudTooltip Text="Cost is estimated">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">est.</MudChip>
+                        </MudTooltip>
+                    }
+                </MudStack>
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn CellClass="d-flex justify-end" Title="Actions" Sortable="false">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                               Size="Size.Small"
+                               OnClick="@(() => Navigation.NavigateTo($"/recipes/{context.Item.Id}"))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                               Size="Size.Small"
+                               Color="Color.Error"
+                               OnClick="@(() => DeleteAsync(context.Item))" />
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent>
+        @if (_recipes.Count > 0 && !string.IsNullOrWhiteSpace(_search))
+        {
+            <MudText Class="pa-4">No recipes match your search.</MudText>
+        }
+        else
+        {
+            <MudText Class="pa-4">No recipes yet. Add the meals you cook.</MudText>
+        }
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private IReadOnlyList<RecipeSummaryDto> _recipes = [];
+    private bool _loading = true;
+    private string _search = string.Empty;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private bool QuickFilter(RecipeSummaryDto recipe) =>
+        string.IsNullOrWhiteSpace(_search)
+        || recipe.Name.Contains(_search, StringComparison.OrdinalIgnoreCase);
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _recipes = await Api.GetRecipesAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task DeleteAsync(RecipeSummaryDto recipe)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Delete recipe",
+            MarkupMessage = new MarkupString($"Remove {recipe.Name}?"),
+            YesText = "Delete",
+            CancelText = "Cancel",
+        });
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.DeleteRecipeAsync(recipe.Id);
+            Snackbar.Add($"Deleted {recipe.Name}.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not delete the recipe.", Severity.Error);
+        }
+    }
+}

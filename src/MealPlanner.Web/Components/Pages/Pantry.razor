@@ -1,0 +1,171 @@
+@page "/pantry"
+@using MealPlanner.Contracts
+@using MealPlanner.Web.Components.Dialogs
+@inject MealPlannerApiClient Api
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Pantry - MealPlanner</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
+    <MudText Typo="Typo.h4">Pantry &amp; freezer</MudText>
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="@(() => OpenEditorAsync(null))">
+        Add item
+    </MudButton>
+</MudStack>
+
+<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+    Track what you already have on hand so meal plans and shopping lists don't double-buy.
+</MudText>
+
+<MudDataGrid T="PantryItemDto"
+             Items="_items"
+             Loading="_loading"
+             Hover="true"
+             Groupable="true"
+             GroupExpanded="true"
+             Filterable="true"
+             QuickFilter="QuickFilter"
+             Elevation="1">
+    <ToolBarContent>
+        <MudTextField @bind-Value="_search"
+                      Placeholder="Search items"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true"
+                      Class="mt-0" />
+    </ToolBarContent>
+    <Columns>
+        <PropertyColumn Property="p => p.Location" Title="Location" Grouping="true" />
+        <PropertyColumn Property="p => p.IngredientName" Title="Ingredient" />
+        <TemplateColumn Title="On hand" SortBy="p => p.QuantityOnHand">
+            <CellTemplate>@context.Item.QuantityOnHand @UnitLabel(context.Item.Unit)</CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn CellClass="d-flex justify-end" Title="Actions" Sortable="false">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                               Size="Size.Small"
+                               OnClick="@(() => OpenEditorAsync(context.Item))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                               Size="Size.Small"
+                               Color="Color.Error"
+                               OnClick="@(() => DeleteAsync(context.Item))" />
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent>
+        @if (_items.Count > 0 && !string.IsNullOrWhiteSpace(_search))
+        {
+            <MudText Class="pa-4">No pantry items match your search.</MudText>
+        }
+        else
+        {
+            <MudText Class="pa-4">Nothing tracked yet. Add what's in your pantry and freezer.</MudText>
+        }
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private IReadOnlyList<PantryItemDto> _items = [];
+    private IReadOnlyList<IngredientDto> _ingredients = [];
+    private bool _loading = true;
+    private string _search = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _ingredients = await Api.GetIngredientsAsync();
+        await ReloadAsync();
+    }
+
+    private static string UnitLabel(MeasurementUnit unit) => unit switch
+    {
+        MeasurementUnit.Millilitre => "ml",
+        MeasurementUnit.Each => "each",
+        _ => "g",
+    };
+
+    private bool QuickFilter(PantryItemDto item) =>
+        string.IsNullOrWhiteSpace(_search)
+        || item.IngredientName.Contains(_search, StringComparison.OrdinalIgnoreCase);
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _items = await Api.GetPantryItemsAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenEditorAsync(PantryItemDto? existing)
+    {
+        var parameters = new DialogParameters<PantryItemDialog>
+        {
+            { x => x.Existing, existing },
+            { x => x.Ingredients, _ingredients },
+        };
+        var title = existing is null ? "Add pantry item" : "Edit pantry item";
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<PantryItemDialog>(title, parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not SavePantryItemRequest request)
+        {
+            return;
+        }
+
+        try
+        {
+            if (existing is null)
+            {
+                await Api.CreatePantryItemAsync(request);
+                Snackbar.Add("Added pantry item.", Severity.Success);
+            }
+            else
+            {
+                await Api.UpdatePantryItemAsync(existing.Id, request);
+                Snackbar.Add("Updated pantry item.", Severity.Success);
+            }
+
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not save the pantry item. Is the API running?", Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync(PantryItemDto item)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Delete pantry item",
+            MarkupMessage = new MarkupString($"Remove {item.IngredientName} from your {item.Location.ToString().ToLowerInvariant()}?"),
+            YesText = "Delete",
+            CancelText = "Cancel",
+        });
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.DeletePantryItemAsync(item.Id);
+            Snackbar.Add("Deleted pantry item.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not delete the pantry item.", Severity.Error);
+        }
+    }
+}

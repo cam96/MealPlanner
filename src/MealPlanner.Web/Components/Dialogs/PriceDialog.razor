@@ -1,0 +1,134 @@
+@using MealPlanner.Contracts
+@using MealPlanner.Contracts.Prices
+@using MealPlanner.Contracts.Stores
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudSelect @bind-Value="_model.StoreId"
+                       Label="Store"
+                       Required="true"
+                       RequiredError="Select a store.">
+                @foreach (var store in Stores)
+                {
+                    <MudSelectItem Value="store.Id">@store.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudNumericField @bind-Value="_model.Price"
+                             Label="Price ($)"
+                             Min="0"
+                             Format="F2"
+                             Adornment="Adornment.Start"
+                             AdornmentText="$"
+                             Class="mt-3" />
+
+            <MudStack Row="true" Spacing="2" Class="mt-3">
+                <MudNumericField @bind-Value="_model.PackageQuantity"
+                                 Label="Package quantity"
+                                 Min="0"
+                                 Class="flex-grow-1" />
+                <MudSelect @bind-Value="_model.PackageUnit" Label="Unit" Class="flex-grow-1">
+                    <MudSelectItem Value="MeasurementUnit.Gram">g</MudSelectItem>
+                    <MudSelectItem Value="MeasurementUnit.Millilitre">ml</MudSelectItem>
+                    <MudSelectItem Value="MeasurementUnit.Each">each</MudSelectItem>
+                </MudSelect>
+            </MudStack>
+
+            <MudDatePicker @bind-Date="_model.RecordedDate"
+                           Label="Date recorded"
+                           Class="mt-3" />
+
+            <MudSwitch @bind-Value="_model.IsPreferredStore"
+                       Label="Preferred store for this ingredient"
+                       Color="Color.Primary"
+                       Class="mt-3" />
+            <MudSwitch @bind-Value="_model.IsEstimated"
+                       Label="Price is estimated"
+                       Color="Color.Warning" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private PriceEditModel _model = new();
+
+    /// <summary>The dialog instance used to return a result.</summary>
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The stores available to choose from.</summary>
+    [Parameter]
+    public IReadOnlyList<StoreDto> Stores { get; set; } = [];
+
+    /// <summary>The price to edit, or <see langword="null"/> to create a new one.</summary>
+    [Parameter]
+    public IngredientPriceDto? Existing { get; set; }
+
+    /// <inheritdoc />
+    protected override void OnParametersSet()
+    {
+        if (Existing is { } price)
+        {
+            _model = new PriceEditModel
+            {
+                StoreId = price.StoreId,
+                Price = price.Price,
+                PackageQuantity = price.PackageQuantity,
+                PackageUnit = price.PackageUnit,
+                RecordedDate = price.RecordedDate.ToDateTime(TimeOnly.MinValue),
+                IsEstimated = price.IsEstimated,
+                IsPreferredStore = price.IsPreferredStore,
+            };
+        }
+        else if (_model.StoreId == 0 && Stores.Count > 0)
+        {
+            _model.StoreId = Stores[0].Id;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        var recorded = DateOnly.FromDateTime(_model.RecordedDate ?? DateTime.Today);
+        var request = new SaveIngredientPriceRequest(
+            _model.StoreId,
+            _model.Price,
+            _model.PackageQuantity,
+            _model.PackageUnit,
+            recorded,
+            _model.IsEstimated,
+            _model.IsPreferredStore);
+
+        MudDialog.Close(DialogResult.Ok(request));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private sealed class PriceEditModel
+    {
+        public int StoreId { get; set; }
+
+        public decimal Price { get; set; }
+
+        public double PackageQuantity { get; set; } = 1;
+
+        public MeasurementUnit PackageUnit { get; set; } = MeasurementUnit.Gram;
+
+        public DateTime? RecordedDate { get; set; } = DateTime.Today;
+
+        public bool IsEstimated { get; set; }
+
+        public bool IsPreferredStore { get; set; }
+    }
+}

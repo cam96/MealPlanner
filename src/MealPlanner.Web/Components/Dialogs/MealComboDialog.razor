@@ -1,0 +1,124 @@
+@using MealPlanner.Contracts.Combos
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
+            Combine one food from each column into a rough meal. This isn't a formal recipe — just a
+            reusable pairing you can drop onto the planner.
+        </MudText>
+        <MudForm @ref="_form" Model="_model">
+            <MudTextField @bind-Value="_model.Name"
+                          Label="Combo name"
+                          Required="true"
+                          RequiredError="Name is required."
+                          MaxLength="200" />
+
+            <MudSelect T="int?" @bind-Value="_model.ProteinIngredientId" Label="Protein" Clearable="true" Class="mt-3">
+                @foreach (var item in Proteins)
+                {
+                    <MudSelectItem T="int?" Value="@item.IngredientId">@item.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="int?" @bind-Value="_model.CarbohydrateIngredientId" Label="Carbohydrate" Clearable="true" Class="mt-3">
+                @foreach (var item in Carbohydrates)
+                {
+                    <MudSelectItem T="int?" Value="@item.IngredientId">@item.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="int?" @bind-Value="_model.VegetableIngredientId" Label="Vegetable" Clearable="true" Class="mt-3">
+                @foreach (var item in Vegetables)
+                {
+                    <MudSelectItem T="int?" Value="@item.IngredientId">@item.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            @if (_error is not null)
+            {
+                <MudText Color="Color.Error" Typo="Typo.caption" Class="mt-2 d-block">@_error</MudText>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private ComboEditModel _model = new();
+    private string? _error;
+
+    /// <summary>The dialog instance used to return a result.</summary>
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The combo to edit, or <see langword="null"/> to create a new one.</summary>
+    [Parameter]
+    public MealComboDto? Existing { get; set; }
+
+    /// <summary>The protein ingredients available to choose from.</summary>
+    [Parameter]
+    public IReadOnlyList<CategoryIngredientDto> Proteins { get; set; } = [];
+
+    /// <summary>The carbohydrate ingredients available to choose from.</summary>
+    [Parameter]
+    public IReadOnlyList<CategoryIngredientDto> Carbohydrates { get; set; } = [];
+
+    /// <summary>The vegetable ingredients available to choose from.</summary>
+    [Parameter]
+    public IReadOnlyList<CategoryIngredientDto> Vegetables { get; set; } = [];
+
+    /// <inheritdoc />
+    protected override void OnParametersSet()
+    {
+        if (Existing is { } combo)
+        {
+            _model = new ComboEditModel
+            {
+                Name = combo.Name,
+                ProteinIngredientId = combo.ProteinIngredientId,
+                CarbohydrateIngredientId = combo.CarbohydrateIngredientId,
+                VegetableIngredientId = combo.VegetableIngredientId,
+            };
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+
+        var anyChosen = _model.ProteinIngredientId is not null
+            || _model.CarbohydrateIngredientId is not null
+            || _model.VegetableIngredientId is not null;
+        _error = anyChosen ? null : "Choose at least one ingredient.";
+
+        if (!_form.IsValid || !anyChosen)
+        {
+            return;
+        }
+
+        var request = new SaveMealComboRequest(
+            _model.Name.Trim(),
+            _model.ProteinIngredientId,
+            _model.CarbohydrateIngredientId,
+            _model.VegetableIngredientId);
+
+        MudDialog.Close(DialogResult.Ok(request));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private sealed class ComboEditModel
+    {
+        public string Name { get; set; } = string.Empty;
+
+        public int? ProteinIngredientId { get; set; }
+
+        public int? CarbohydrateIngredientId { get; set; }
+
+        public int? VegetableIngredientId { get; set; }
+    }
+}

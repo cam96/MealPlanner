@@ -1,0 +1,54 @@
+@using MealPlanner.Contracts
+@using MealPlanner.Contracts.Planning
+
+<MudDialog>
+    <DialogContent>
+        <MudForm Model="_model">
+            <MudSelect @bind-Value="_model.DayType" Label="Day type">
+                <MudSelectItem Value="DayType.Normal">Normal (counts toward goals)</MudSelectItem>
+                <MudSelectItem Value="DayType.EatingOut">Eating out</MudSelectItem>
+                <MudSelectItem Value="DayType.Event">Event</MudSelectItem>
+            </MudSelect>
+
+            <MudTextField @bind-Value="_model.Note"
+                          Label="Note"
+                          Lines="3"
+                          MaxLength="500"
+                          Class="mt-3" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private DayEditModel _model = new();
+
+    /// <summary>The dialog instance used to return a result.</summary>
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The day being edited.</summary>
+    [Parameter]
+    public DayPlanDto Day { get; set; } = default!;
+
+    /// <inheritdoc />
+    protected override void OnParametersSet()
+    {
+        _model = new DayEditModel { DayType = Day.DayType, Note = Day.Note };
+    }
+
+    private void Submit() =>
+        MudDialog.Close(DialogResult.Ok(new SaveDayRequest(_model.DayType, _model.Note)));
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private sealed class DayEditModel
+    {
+        public DayType DayType { get; set; } = DayType.Normal;
+
+        public string? Note { get; set; }
+    }
+}

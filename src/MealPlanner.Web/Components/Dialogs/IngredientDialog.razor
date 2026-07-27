@@ -1,0 +1,242 @@
+@using MealPlanner.Contracts
+@using MealPlanner.Contracts.Ingredients
+@inject MealPlannerApiClient Api
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudTextField @bind-Value="_model.Name"
+                          Label="Name"
+                          Required="true"
+                          RequiredError="Name is required."
+                          MaxLength="200" />
+            <MudSelect @bind-Value="_model.BaseUnit"
+                       Label="Base unit"
+                       Class="mt-3">
+                <MudSelectItem Value="MeasurementUnit.Gram">Grams (g)</MudSelectItem>
+                <MudSelectItem Value="MeasurementUnit.Millilitre">Millilitres (ml)</MudSelectItem>
+                <MudSelectItem Value="MeasurementUnit.Each">Each (count)</MudSelectItem>
+            </MudSelect>
+
+            <MudSelect @bind-Value="_model.Category"
+                       Label="Meal category"
+                       HelperText="Group interchangeable foods for building meals."
+                       Class="mt-3">
+                <MudSelectItem Value="FoodCategory.None">None</MudSelectItem>
+                <MudSelectItem Value="FoodCategory.Protein">Protein</MudSelectItem>
+                <MudSelectItem Value="FoodCategory.Carbohydrate">Carbohydrate</MudSelectItem>
+                <MudSelectItem Value="FoodCategory.Vegetable">Vegetable</MudSelectItem>
+            </MudSelect>
+
+            @if (_cnfAvailable)
+            {
+                <MudAutocomplete T="CnfFoodSummaryDto"
+                                 Label="Populate from Canadian Nutrient File"
+                                 Value="_selectedCnfFood"
+                                 ValueChanged="OnCnfFoodSelectedAsync"
+                                 SearchFunc="SearchCnfAsync"
+                                 ToStringFunc="f => f?.Description ?? string.Empty"
+                                 ResetValueOnEmptyText="true"
+                                 CoerceText="true"
+                                 MinCharacters="2"
+                                 Clearable="true"
+                                 HelperText="Search foods to fill in the nutrition below."
+                                 Class="mt-3" />
+            }
+
+            <MudText Typo="Typo.subtitle2" Class="mt-4">Nutrition per 100 @UnitLabel</MudText>
+            <MudNumericField @bind-Value="_model.CaloriesPer100"
+                             Label="Calories (kcal)"
+                             Min="0"
+                             Class="mt-2" />
+            <MudNumericField @bind-Value="_model.ProteinPer100"
+                             Label="Protein (g)"
+                             Min="0"
+                             Class="mt-3" />
+            <MudNumericField @bind-Value="_model.FiberPer100"
+                             Label="Fibre (g)"
+                             Min="0"
+                             Class="mt-3" />
+            <MudNumericField @bind-Value="_model.CarbsPer100"
+                             Label="Carbs (g)"
+                             Min="0"
+                             Class="mt-3" />
+            <MudNumericField @bind-Value="_model.FatPer100"
+                             Label="Fat (g)"
+                             Min="0"
+                             Class="mt-3" />
+
+            @if (_model.BaseUnit == MeasurementUnit.Each)
+            {
+                <MudNumericField @bind-Value="_model.ServingWeightG"
+                                 Label="Weight of one item (g)"
+                                 Min="0"
+                                 HelperText="Used to convert counts to grams for nutrition."
+                                 Class="mt-3" />
+            }
+
+            <MudSwitch @bind-Value="_model.IsNutritionEstimated"
+                       Label="Nutrition is estimated"
+                       Color="Color.Warning"
+                       Class="mt-3" />
+
+            @if (_model.CnfFoodCode is { } cnfCode)
+            {
+                <MudText Typo="Typo.caption" Class="mt-2 d-block mud-text-secondary">
+                    Source: Canadian Nutrient File, Health Canada, 2015 (food code @cnfCode).
+                </MudText>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private IngredientEditModel _model = new();
+    private bool _cnfAvailable;
+    private CnfFoodSummaryDto? _selectedCnfFood;
+
+    /// <summary>The dialog instance used to return a result.</summary>
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The ingredient to edit, or <see langword="null"/> to create a new one.</summary>
+    [Parameter]
+    public IngredientDto? Existing { get; set; }
+
+    /// <summary>
+    /// The meal category to pre-select when creating a new ingredient. Ignored when editing an
+    /// existing ingredient.
+    /// </summary>
+    [Parameter]
+    public FoodCategory DefaultCategory { get; set; } = FoodCategory.None;
+
+    private string UnitLabel => _model.BaseUnit switch
+    {
+        MeasurementUnit.Millilitre => "ml",
+        MeasurementUnit.Each => "items",
+        _ => "g",
+    };
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync() =>
+        _cnfAvailable = await Api.IsCnfAvailableAsync();
+
+    /// <inheritdoc />
+    protected override void OnParametersSet()
+    {
+        if (Existing is { } ingredient)
+        {
+            _model = new IngredientEditModel
+            {
+                Name = ingredient.Name,
+                BaseUnit = ingredient.BaseUnit,
+                Category = ingredient.Category,
+                CaloriesPer100 = ingredient.CaloriesPer100,
+                ProteinPer100 = ingredient.ProteinPer100,
+                FiberPer100 = ingredient.FiberPer100,
+                CarbsPer100 = ingredient.CarbsPer100,
+                FatPer100 = ingredient.FatPer100,
+                IsNutritionEstimated = ingredient.IsNutritionEstimated,
+                CnfFoodCode = ingredient.CnfFoodCode,
+                ServingWeightG = ingredient.ServingWeightG,
+            };
+        }
+        else
+        {
+            _model.Category = DefaultCategory;
+        }
+    }
+
+    private async Task<IEnumerable<CnfFoodSummaryDto>> SearchCnfAsync(string value, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Trim().Length < 2)
+        {
+            return [];
+        }
+
+        return await Api.SearchCnfFoodsAsync(value, cancellationToken);
+    }
+
+    private async Task OnCnfFoodSelectedAsync(CnfFoodSummaryDto? food)
+    {
+        _selectedCnfFood = food;
+        if (food is null)
+        {
+            return;
+        }
+
+        var nutrition = await Api.GetCnfFoodAsync(food.FoodCode);
+        if (nutrition is null)
+        {
+            return;
+        }
+
+        _model.CaloriesPer100 = nutrition.CaloriesPer100;
+        _model.ProteinPer100 = nutrition.ProteinPer100;
+        _model.FiberPer100 = nutrition.FiberPer100;
+        _model.CarbsPer100 = nutrition.CarbsPer100;
+        _model.FatPer100 = nutrition.FatPer100;
+        _model.CnfFoodCode = nutrition.FoodCode;
+        _model.IsNutritionEstimated = false;
+
+        if (string.IsNullOrWhiteSpace(_model.Name))
+        {
+            _model.Name = nutrition.Description;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+        var request = new SaveIngredientRequest(
+            _model.Name.Trim(),
+            _model.BaseUnit,
+            _model.Category,
+            _model.CaloriesPer100,
+            _model.ProteinPer100,
+            _model.FiberPer100,
+            _model.CarbsPer100,
+            _model.FatPer100,
+            _model.IsNutritionEstimated,
+            _model.CnfFoodCode,
+            _model.BaseUnit == MeasurementUnit.Each ? _model.ServingWeightG : null);
+
+        MudDialog.Close(DialogResult.Ok(request));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private sealed class IngredientEditModel
+    {
+        public string Name { get; set; } = string.Empty;
+
+        public MeasurementUnit BaseUnit { get; set; } = MeasurementUnit.Gram;
+
+        public FoodCategory Category { get; set; } = FoodCategory.None;
+
+        public double CaloriesPer100 { get; set; }
+
+        public double ProteinPer100 { get; set; }
+
+        public double FiberPer100 { get; set; }
+
+        public double CarbsPer100 { get; set; }
+
+        public double FatPer100 { get; set; }
+
+        public bool IsNutritionEstimated { get; set; }
+
+        public int? CnfFoodCode { get; set; }
+
+        public double? ServingWeightG { get; set; }
+    }
+}

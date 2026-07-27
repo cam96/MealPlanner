@@ -1,0 +1,427 @@
+@page "/planner"
+@using System.Globalization
+@using MealPlanner.Contracts
+@using MealPlanner.Contracts.Planning
+@using MealPlanner.Contracts.People
+@using MealPlanner.Contracts.Recipes
+@using MealPlanner.Web.Components.Dialogs
+@inject MealPlannerApiClient Api
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Planner - MealPlanner</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
+    <MudText Typo="Typo.h4">Meal planner</MudText>
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" OnClick="PreviousMonthAsync" />
+        <MudText Typo="Typo.h6" Style="min-width: 180px; text-align: center;">@MonthLabel</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" OnClick="NextMonthAsync" />
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="GoToTodayAsync">Today</MudButton>
+    </MudStack>
+</MudStack>
+
+<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+    Plan meals for each day. Only normal days count toward nutrition goals; eating-out and event days
+    are skipped. Estimated nutrition is marked with an asterisk.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-4" />
+}
+else if (_plan is not null)
+{
+    <div class="planner-weekdays">
+        @foreach (var name in WeekdayNames)
+        {
+            <div class="planner-weekday">@name</div>
+        }
+    </div>
+
+    @foreach (var week in _weeks)
+    {
+        <div class="planner-week">
+            @foreach (var slot in week)
+            {
+                @if (slot is null)
+                {
+                    <div class="planner-cell planner-cell-empty"></div>
+                }
+                else
+                {
+                    var day = slot;
+                    <MudPaper Elevation="1" Class="@CellClass(day)">
+                        <div class="planner-cell-head">
+                            <MudText Typo="Typo.subtitle2">@day.Date.Day</MudText>
+                            <div>
+                                @if (day.DayType != DayType.Normal)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ma-0">
+                                        @DayTypeLabel(day.DayType)
+                                    </MudChip>
+                                }
+                                @if (day.PrepMinutes > 0)
+                                {
+                                    <MudTooltip Text="Prep + cook minutes">
+                                        <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Timer" Class="ma-0">
+                                            @day.PrepMinutes
+                                        </MudChip>
+                                    </MudTooltip>
+                                }
+                                <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                                               Size="Size.Small"
+                                               OnClick="@(() => EditDayAsync(day))" />
+                            </div>
+                        </div>
+
+                        @foreach (var meal in day.Meals)
+                        {
+                            <div class="planner-meal">
+                                <MudTooltip Text="@MealTooltip(meal)">
+                                    <span class="planner-meal-text" @onclick="@(() => EditMealAsync(day, meal))">
+                                        <b>@SlotLabel(meal.Slot):</b> @MealName(meal)
+                                        <span class="mud-text-secondary">(@AssigneeLabel(meal.Assignee))</span>
+                                        @if (IsCombo(meal))
+                                        {
+                                            <span class="planner-meal-note">· no nutrition</span>
+                                        }
+                                    </span>
+                                </MudTooltip>
+                                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                               Size="Size.Small"
+                                               OnClick="@(() => DeleteMealAsync(meal))" />
+                            </div>
+                        }
+
+                        @if (day.DayType == DayType.Normal)
+                        {
+                            @foreach (var line in NutritionForDay(day.Date))
+                            {
+                                <div class="planner-nutrition">
+                                    <span class="@GoalClass(line.Calories, line.CalorieGoal)">
+                                        @line.PersonName: @line.Calories.ToString("0") / @line.CalorieGoal kcal@(line.IsEstimated ? "*" : string.Empty)
+                                    </span>
+                                </div>
+                            }
+                        }
+
+                        <MudButton Variant="Variant.Text"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="@(() => AddMealAsync(day))"
+                                   Class="mt-1">
+                            Meal
+                        </MudButton>
+                    </MudPaper>
+                }
+            }
+        </div>
+    }
+}
+
+<style>
+    .planner-weekdays,
+    .planner-week {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 8px;
+    }
+
+    .planner-week {
+        margin-bottom: 8px;
+    }
+
+    .planner-weekday {
+        font-weight: 600;
+        text-align: center;
+        padding: 4px 0;
+    }
+
+    .planner-cell {
+        min-height: 120px;
+        padding: 6px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .planner-cell-empty {
+        min-height: 120px;
+    }
+
+    .planner-cell-nonnormal {
+        opacity: 0.7;
+    }
+
+    .planner-cell-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .planner-meal {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.75rem;
+    }
+
+    .planner-meal-text {
+        cursor: pointer;
+    }
+
+    .planner-meal-note {
+        color: var(--mud-palette-text-secondary);
+        font-style: italic;
+    }
+
+    .planner-nutrition {
+        font-size: 0.7rem;
+    }
+
+    .planner-goal-met {
+        color: var(--mud-palette-success);
+    }
+
+    .planner-goal-under {
+        color: var(--mud-palette-text-secondary);
+    }
+</style>
+
+@code {
+    private static readonly string[] WeekdayNames =
+        ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    private MealPlanDto? _plan;
+    private IReadOnlyList<RecipeSummaryDto> _recipes = [];
+    private IReadOnlyList<MealComboDto> _combos = [];
+    private IReadOnlyList<PersonDto> _people = [];
+    private List<List<DayPlanDto?>> _weeks = [];
+    private bool _loading = true;
+    private int _year = DateTime.Today.Year;
+    private int _month = DateTime.Today.Month;
+
+    private string MonthLabel =>
+        new DateOnly(_year, _month, 1).ToString("MMMM yyyy", CultureInfo.CurrentCulture);
+
+    private string FirstPersonName =>
+        _people.OrderBy(p => p.Id).Select(p => p.Name).FirstOrDefault() ?? "First person";
+
+    private string SecondPersonName =>
+        _people.OrderBy(p => p.Id).Select(p => p.Name).Skip(1).FirstOrDefault() ?? "Second person";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _recipes = await Api.GetRecipesAsync();
+        _combos = await Api.GetCombosAsync();
+        _people = await Api.GetPeopleAsync();
+        await LoadMonthAsync();
+    }
+
+    private async Task LoadMonthAsync()
+    {
+        _loading = true;
+        try
+        {
+            _plan = await Api.GetMealPlanAsync(_year, _month);
+            BuildWeeks();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not load the plan. Is the API running?", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void BuildWeeks()
+    {
+        _weeks = [];
+        if (_plan is null)
+        {
+            return;
+        }
+
+        var byDate = _plan.Days.ToDictionary(d => d.Date);
+        var first = new DateOnly(_year, _month, 1);
+        var daysInMonth = DateTime.DaysInMonth(_year, _month);
+        var lead = (int)first.DayOfWeek; // Sunday = 0
+
+        var current = new List<DayPlanDto?>();
+        for (var i = 0; i < lead; i++)
+        {
+            current.Add(null);
+        }
+
+        for (var day = 1; day <= daysInMonth; day++)
+        {
+            var date = new DateOnly(_year, _month, day);
+            current.Add(byDate.TryGetValue(date, out var dp) ? dp : null);
+            if (current.Count == 7)
+            {
+                _weeks.Add(current);
+                current = [];
+            }
+        }
+
+        if (current.Count > 0)
+        {
+            while (current.Count < 7)
+            {
+                current.Add(null);
+            }
+
+            _weeks.Add(current);
+        }
+    }
+
+    private IEnumerable<PersonDayNutritionDto> NutritionForDay(DateOnly date) =>
+        _plan is null
+            ? []
+            : _plan.Nutrition.Where(n => n.Date == date).OrderBy(n => n.PersonId);
+
+    private async Task PreviousMonthAsync()
+    {
+        var previous = new DateOnly(_year, _month, 1).AddMonths(-1);
+        _year = previous.Year;
+        _month = previous.Month;
+        await LoadMonthAsync();
+    }
+
+    private async Task NextMonthAsync()
+    {
+        var next = new DateOnly(_year, _month, 1).AddMonths(1);
+        _year = next.Year;
+        _month = next.Month;
+        await LoadMonthAsync();
+    }
+
+    private async Task GoToTodayAsync()
+    {
+        _year = DateTime.Today.Year;
+        _month = DateTime.Today.Month;
+        await LoadMonthAsync();
+    }
+
+    private async Task AddMealAsync(DayPlanDto day)
+    {
+        var parameters = new DialogParameters<PlannedMealDialog>
+        {
+            { x => x.Recipes, _recipes },
+            { x => x.Combos, _combos },
+            { x => x.FirstPersonName, FirstPersonName },
+            { x => x.SecondPersonName, SecondPersonName },
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<PlannedMealDialog>("Add meal", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not SavePlannedMealRequest request)
+        {
+            return;
+        }
+
+        await MutateAsync(() => Api.AddPlannedMealAsync(day.Id, request), "Added meal.");
+    }
+
+    private async Task EditMealAsync(DayPlanDto day, PlannedMealDto meal)
+    {
+        var parameters = new DialogParameters<PlannedMealDialog>
+        {
+            { x => x.Existing, meal },
+            { x => x.Recipes, _recipes },
+            { x => x.Combos, _combos },
+            { x => x.FirstPersonName, FirstPersonName },
+            { x => x.SecondPersonName, SecondPersonName },
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<PlannedMealDialog>("Edit meal", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not SavePlannedMealRequest request)
+        {
+            return;
+        }
+
+        await MutateAsync(() => Api.UpdatePlannedMealAsync(meal.Id, request), "Updated meal.");
+    }
+
+    private async Task DeleteMealAsync(PlannedMealDto meal)
+    {
+        await MutateAsync(() => Api.DeletePlannedMealAsync(meal.Id), "Removed meal.");
+    }
+
+    private async Task EditDayAsync(DayPlanDto day)
+    {
+        var parameters = new DialogParameters<DayPlanDialog> { { x => x.Day, day } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<DayPlanDialog>("Edit day", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not SaveDayRequest request)
+        {
+            return;
+        }
+
+        await MutateAsync(() => Api.UpdateDayAsync(day.Id, request), "Updated day.");
+    }
+
+    private async Task MutateAsync(Func<Task<MealPlanDto?>> action, string successMessage)
+    {
+        try
+        {
+            var updated = await action();
+            if (updated is not null)
+            {
+                _plan = updated;
+                BuildWeeks();
+            }
+
+            Snackbar.Add(successMessage, Severity.Success);
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not save the change. Is the API running?", Severity.Error);
+        }
+    }
+
+    private static string CellClass(DayPlanDto day) =>
+        day.DayType == DayType.Normal ? "planner-cell" : "planner-cell planner-cell-nonnormal";
+
+    private static string GoalClass(double actual, int goal) =>
+        goal > 0 && actual >= goal ? "planner-goal-met" : "planner-goal-under";
+
+    private static string DayTypeLabel(DayType type) => type switch
+    {
+        DayType.EatingOut => "Eating out",
+        DayType.Event => "Event",
+        _ => "Normal",
+    };
+
+    private static string SlotLabel(MealType slot) => slot switch
+    {
+        MealType.Breakfast => "B",
+        MealType.Lunch => "L",
+        MealType.Dinner => "D",
+        _ => "S",
+    };
+
+    private static string AssigneeLabel(MealAssignee assignee) => assignee switch
+    {
+        MealAssignee.FirstPerson => "1st",
+        MealAssignee.SecondPerson => "2nd",
+        _ => "shared",
+    };
+
+    private static string MealName(PlannedMealDto meal) =>
+        meal.RecipeName ?? meal.MealComboName ?? "(meal)";
+
+    private static bool IsCombo(PlannedMealDto meal) => meal.MealComboName is not null;
+
+    private string MealTooltip(PlannedMealDto meal) =>
+        IsCombo(meal)
+            ? $"{MealName(meal)} — {meal.Servings} serving(s), {AssigneeLabel(meal.Assignee)}. Combos don't include a nutrition estimate."
+            : $"{MealName(meal)} — {meal.Servings} serving(s), {AssigneeLabel(meal.Assignee)}";
+}

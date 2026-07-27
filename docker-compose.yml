@@ -1,0 +1,50 @@
+# MealPlanner — home deployment stack. One `docker compose up -d` runs the whole app on the
+# local network. The API owns the SQLite database; the Blazor web front-end reaches it by the
+# `api` service name via Aspire service discovery configuration.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: src/MealPlanner.Api/Dockerfile
+    image: mealplanner-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      # The database and rotating pre-migration backups live on named volumes, never the
+      # container's writable layer, so data survives rebuilds and updates.
+      ConnectionStrings__mealplanner: Data Source=/data/mealplanner.db
+      MealPlanner__BackupDirectory: /backups
+      # Set to true on a fresh install to load representative demo data (off by default).
+      MealPlanner__SeedDemoData: "false"
+    volumes:
+      - mealplanner-data:/data
+      - mealplanner-backups:/backups
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  web:
+    build:
+      context: .
+      dockerfile: src/MealPlanner.Web/Dockerfile
+    image: mealplanner-web
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      # Aspire service discovery: resolve the "api" client base address to the api container.
+      services__api__http__0: http://api:8080
+    ports:
+      # Browse the app at http://<host>:8080 on the home network.
+      - "8080:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mealplanner-data:
+  mealplanner-backups:

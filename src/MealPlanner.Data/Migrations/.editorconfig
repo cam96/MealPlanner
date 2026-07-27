@@ -1,0 +1,7 @@
+# EF Core generates migration files that don't follow our source style conventions
+# (block-scoped namespaces, etc.). These are generated code, so relax style rules here.
+[*.cs]
+dotnet_diagnostic.IDE0161.severity = none
+dotnet_diagnostic.IDE0005.severity = none
+dotnet_style_namespace_declarations = block_scoped:silent
+generated_code = true

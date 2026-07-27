@@ -1,0 +1,22 @@
+# Build outputs
+**/bin/
+**/obj/
+
+# Local databases and backups (never ship these into an image)
+**/*.db
+**/*.db-shm
+**/*.db-wal
+data/
+backups/
+
+# Tooling / VCS
+.git/
+.github/
+.vs/
+.vscode/
+**/*.user
+TestResults/
+coveragereport/
+
+# Docs and specs are not needed in the build context
+docs/

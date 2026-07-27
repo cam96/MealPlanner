@@ -1,0 +1,16 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.4.6">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>bbe93359-7a23-40e5-a988-720858650cf1</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MealPlanner.Api\MealPlanner.Api.csproj" />
+    <ProjectReference Include="..\MealPlanner.Web\MealPlanner.Web.csproj" />
+  </ItemGroup>
+
+</Project>

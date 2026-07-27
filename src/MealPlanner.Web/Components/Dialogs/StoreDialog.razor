@@ -1,0 +1,57 @@
+@using MealPlanner.Contracts.Stores
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudTextField @bind-Value="_model.Name"
+                          Label="Store name"
+                          Required="true"
+                          RequiredError="Name is required."
+                          MaxLength="100" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private StoreEditModel _model = new();
+
+    /// <summary>The dialog instance used to return a result.</summary>
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The store to edit, or <see langword="null"/> to create a new one.</summary>
+    [Parameter]
+    public StoreDto? Existing { get; set; }
+
+    /// <inheritdoc />
+    protected override void OnParametersSet()
+    {
+        if (Existing is { } store)
+        {
+            _model = new StoreEditModel { Name = store.Name };
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid)
+        {
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(new SaveStoreRequest(_model.Name.Trim())));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private sealed class StoreEditModel
+    {
+        public string Name { get; set; } = string.Empty;
+    }
+}

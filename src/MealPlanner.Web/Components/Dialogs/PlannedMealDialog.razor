@@ -1,0 +1,185 @@
+@using MealPlanner.Contracts
+@using MealPlanner.Contracts.Planning
+@using MealPlanner.Contracts.Recipes
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudSelect @bind-Value="_model.Slot" Label="Meal slot">
+                <MudSelectItem Value="MealType.Breakfast">Breakfast</MudSelectItem>
+                <MudSelectItem Value="MealType.Lunch">Lunch</MudSelectItem>
+                <MudSelectItem Value="MealType.Dinner">Dinner</MudSelectItem>
+                <MudSelectItem Value="MealType.Snack">Snack</MudSelectItem>
+            </MudSelect>
+
+            <MudSelect @bind-Value="_model.Assignee" Label="For" Class="mt-3">
+                <MudSelectItem Value="MealAssignee.Shared">Shared</MudSelectItem>
+                <MudSelectItem Value="MealAssignee.FirstPerson">@FirstPersonName</MudSelectItem>
+                <MudSelectItem Value="MealAssignee.SecondPerson">@SecondPersonName</MudSelectItem>
+            </MudSelect>
+
+            <MudRadioGroup @bind-Value="_model.Source" Class="mt-3">
+                <MudRadio Value="MealSource.Recipe" Color="Color.Primary">Recipe</MudRadio>
+                <MudRadio Value="MealSource.Combo" Color="Color.Primary">Meal combo</MudRadio>
+            </MudRadioGroup>
+
+            @if (_model.Source == MealSource.Recipe)
+            {
+                <MudAutocomplete T="RecipeSummaryDto"
+                                 Label="Recipe"
+                                 @bind-Value="_model.Recipe"
+                                 SearchFunc="SearchRecipesAsync"
+                                 ToStringFunc="r => r?.Name ?? string.Empty"
+                                 ResetValueOnEmptyText="true"
+                                 Clearable="true"
+                                 Error="_sourceError"
+                                 ErrorText="Choose a recipe."
+                                 Class="mt-1"
+                                 Adornment="Adornment.Start"
+                                 AdornmentIcon="@Icons.Material.Filled.Search" />
+            }
+            else
+            {
+                <MudAutocomplete T="MealComboDto"
+                                 Label="Meal combo"
+                                 @bind-Value="_model.Combo"
+                                 SearchFunc="SearchCombosAsync"
+                                 ToStringFunc="c => c?.Name ?? string.Empty"
+                                 ResetValueOnEmptyText="true"
+                                 Clearable="true"
+                                 Error="_sourceError"
+                                 ErrorText="Choose a meal combo."
+                                 Class="mt-1"
+                                 Adornment="Adornment.Start"
+                                 AdornmentIcon="@Icons.Material.Filled.Search" />
+            }
+
+            <MudNumericField @bind-Value="_model.Servings"
+                             Label="Servings"
+                             Min="1"
+                             Class="mt-3" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private PlannedMealEditModel _model = new();
+    private bool _sourceError;
+
+    /// <summary>The dialog instance used to return a result.</summary>
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The planned meal to edit, or <see langword="null"/> to create a new one.</summary>
+    [Parameter]
+    public PlannedMealDto? Existing { get; set; }
+
+    /// <summary>The default slot to preselect when creating a new meal.</summary>
+    [Parameter]
+    public MealType DefaultSlot { get; set; } = MealType.Dinner;
+
+    /// <summary>The recipes available to choose from.</summary>
+    [Parameter]
+    public IReadOnlyList<RecipeSummaryDto> Recipes { get; set; } = [];
+
+    /// <summary>The meal combos available to choose from.</summary>
+    [Parameter]
+    public IReadOnlyList<MealComboDto> Combos { get; set; } = [];
+
+    /// <summary>The first household member's display name.</summary>
+    [Parameter]
+    public string FirstPersonName { get; set; } = "First person";
+
+    /// <summary>The second household member's display name.</summary>
+    [Parameter]
+    public string SecondPersonName { get; set; } = "Second person";
+
+    /// <inheritdoc />
+    protected override void OnParametersSet()
+    {
+        if (Existing is { } meal)
+        {
+            _model = new PlannedMealEditModel
+            {
+                Slot = meal.Slot,
+                Assignee = meal.Assignee,
+                Source = meal.MealComboId is not null ? MealSource.Combo : MealSource.Recipe,
+                Recipe = Recipes.FirstOrDefault(r => r.Id == meal.RecipeId),
+                Combo = Combos.FirstOrDefault(c => c.Id == meal.MealComboId),
+                Servings = meal.Servings,
+            };
+        }
+        else
+        {
+            _model.Slot = DefaultSlot;
+        }
+    }
+
+    private Task<IEnumerable<RecipeSummaryDto>> SearchRecipesAsync(string? value, CancellationToken token)
+    {
+        var matches = string.IsNullOrWhiteSpace(value)
+            ? Recipes
+            : Recipes.Where(r => r.Name.Contains(value, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        return Task.FromResult<IEnumerable<RecipeSummaryDto>>(matches);
+    }
+
+    private Task<IEnumerable<MealComboDto>> SearchCombosAsync(string? value, CancellationToken token)
+    {
+        var matches = string.IsNullOrWhiteSpace(value)
+            ? Combos
+            : Combos.Where(c => c.Name.Contains(value, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        return Task.FromResult<IEnumerable<MealComboDto>>(matches);
+    }
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+
+        var recipeId = _model.Source == MealSource.Recipe ? _model.Recipe?.Id : null;
+        var comboId = _model.Source == MealSource.Combo ? _model.Combo?.Id : null;
+        _sourceError = recipeId is null && comboId is null;
+        if (!_form.IsValid || _sourceError)
+        {
+            return;
+        }
+
+        var request = new SavePlannedMealRequest(
+            _model.Slot,
+            _model.Assignee,
+            recipeId,
+            comboId,
+            _model.Servings);
+
+        MudDialog.Close(DialogResult.Ok(request));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private enum MealSource
+    {
+        Recipe,
+        Combo,
+    }
+
+    private sealed class PlannedMealEditModel
+    {
+        public MealType Slot { get; set; } = MealType.Dinner;
+
+        public MealAssignee Assignee { get; set; } = MealAssignee.Shared;
+
+        public MealSource Source { get; set; } = MealSource.Recipe;
+
+        public RecipeSummaryDto? Recipe { get; set; }
+
+        public MealComboDto? Combo { get; set; }
+
+        public int Servings { get; set; } = 1;
+    }
+}
