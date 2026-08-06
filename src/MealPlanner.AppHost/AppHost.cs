@@ -9,7 +9,8 @@ if (builder.ExecutionContext.IsPublishMode)
     // /backups. The matching named volumes are declared on the generated Docker Compose service
     // during publish (see specs/architecture.md and the Phase 8 deployment steps).
     api.WithEnvironment("ConnectionStrings__mealplanner", "Data Source=/data/mealplanner.db")
-       .WithEnvironment("MealPlanner__BackupDirectory", "/backups");
+       .WithEnvironment("MealPlanner__BackupDirectory", "/backups")
+       .WithEnvironment("MealPlanner__CnfDirectory", "/data/cnf");
 }
 
 // The Blazor front-end calls the API via Aspire service discovery (never the database directly).
