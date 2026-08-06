@@ -32,11 +32,25 @@ public static class IngredientsEndpoints
 
     private static async Task<Ok<IReadOnlyList<IngredientDto>>> GetAllAsync(
         MealPlannerDbContext db,
+        string? q,
+        int? limit,
         CancellationToken cancellationToken)
     {
-        var ingredients = await db.Ingredients
-            .AsNoTracking()
-            .OrderBy(i => i.Name)
+        var query = db.Ingredients.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            query = query.Where(i => EF.Functions.Like(i.Name, $"%{q}%"));
+        }
+
+        query = query.OrderBy(i => i.Name);
+
+        if (limit is > 0)
+        {
+            query = query.Take(limit.Value);
+        }
+
+        var ingredients = await query
             .Select(i => i.ToDto())
             .ToListAsync(cancellationToken);
 

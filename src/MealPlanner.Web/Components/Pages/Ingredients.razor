@@ -125,7 +125,7 @@
     {
         var parameters = new DialogParameters<IngredientDialog> { { x => x.Existing, existing } };
         var title = existing is null ? "Add ingredient" : "Edit ingredient";
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var options = DialogHelper.FormDialog();
         var dialog = await DialogService.ShowAsync<IngredientDialog>(title, parameters, options);
         var result = await dialog.Result;
 

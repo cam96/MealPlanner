@@ -24,6 +24,9 @@ public static class PricesEndpoints
         group.MapPut("/{priceId:int}", UpdateAsync);
         group.MapDelete("/{priceId:int}", DeleteAsync);
 
+        var flat = app.MapGroup("/api/prices").WithTags("Prices");
+        flat.MapGet("/recent", GetRecentAsync);
+
         return app;
     }
 
@@ -124,6 +127,47 @@ public static class PricesEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         return TypedResults.NoContent();
+    }
+
+    private static async Task<Ok<IReadOnlyList<RecentPriceDto>>> GetRecentAsync(
+        MealPlannerDbContext db,
+        string? q,
+        int? limit,
+        CancellationToken cancellationToken)
+    {
+        var take = limit is > 0 ? Math.Min(limit.Value, 100) : 50;
+
+        var query = db.IngredientPrices
+            .AsNoTracking()
+            .Include(p => p.Store)
+            .Include(p => p.Ingredient)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            query = query.Where(p => EF.Functions.Like(p.Ingredient!.Name, $"%{q}%")
+                                   || EF.Functions.Like(p.Store!.Name, $"%{q}%"));
+        }
+
+        var prices = await query
+            .OrderByDescending(p => p.RecordedDate)
+            .ThenBy(p => p.Ingredient!.Name)
+            .Take(take)
+            .Select(p => new RecentPriceDto(
+                p.Id,
+                p.IngredientId,
+                p.Ingredient!.Name,
+                p.StoreId,
+                p.Store!.Name,
+                p.Price,
+                p.PackageQuantity,
+                p.PackageUnit.ToContract(),
+                p.RecordedDate,
+                p.IsEstimated,
+                p.IsPreferredStore))
+            .ToListAsync(cancellationToken);
+
+        return TypedResults.Ok<IReadOnlyList<RecentPriceDto>>(prices);
     }
 
     private static async Task<IDictionary<string, string[]>?> ValidateAsync(

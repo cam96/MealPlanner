@@ -157,6 +157,21 @@ public sealed class MealPlannerApiClient(HttpClient httpClient)
         await httpClient.GetFromJsonAsync<IReadOnlyList<IngredientDto>>("/api/ingredients", JsonOptions, cancellationToken)
             ?? [];
 
+    /// <summary>Searches ingredients by name (server-side filtering).</summary>
+    /// <param name="query">The search term to filter by.</param>
+    /// <param name="limit">Maximum number of results to return.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The filtered list of ingredients.</returns>
+    public async Task<IReadOnlyList<IngredientDto>> SearchIngredientsAsync(
+        string query,
+        int limit = 20,
+        CancellationToken cancellationToken = default) =>
+        await httpClient.GetFromJsonAsync<IReadOnlyList<IngredientDto>>(
+            $"/api/ingredients?q={Uri.EscapeDataString(query)}&limit={limit}",
+            JsonOptions,
+            cancellationToken)
+            ?? [];
+
     /// <summary>Creates an ingredient.</summary>
     /// <param name="request">The ingredient to create.</param>
     /// <param name="cancellationToken">A token to cancel the request.</param>
@@ -369,6 +384,26 @@ public sealed class MealPlannerApiClient(HttpClient httpClient)
         using var response = await httpClient.DeleteAsync(
             $"/api/ingredients/{ingredientId}/prices/{priceId}", cancellationToken);
         response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Gets recent price observations across all ingredients.</summary>
+    /// <param name="query">Optional search term to filter by ingredient or store name.</param>
+    /// <param name="limit">Maximum number of results to return.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The list of recent price observations.</returns>
+    public async Task<IReadOnlyList<RecentPriceDto>> GetRecentPricesAsync(
+        string? query = null,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"/api/prices/recent?limit={limit}";
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            url += $"&q={Uri.EscapeDataString(query)}";
+        }
+
+        return await httpClient.GetFromJsonAsync<IReadOnlyList<RecentPriceDto>>(url, JsonOptions, cancellationToken)
+            ?? [];
     }
 
     // -- Recipes --------------------------------------------------------------------------------

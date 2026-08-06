@@ -164,7 +164,7 @@ else
             { x => x.Stores, _stores },
         };
         var title = existing is null ? "Record price" : "Edit price";
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var options = DialogHelper.FormDialog();
         var dialog = await DialogService.ShowAsync<PriceDialog>(title, parameters, options);
         var result = await dialog.Result;
 

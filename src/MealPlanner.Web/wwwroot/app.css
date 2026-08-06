@@ -58,3 +58,14 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* Mobile-first utilities */
+@media (max-width: 599.98px) {
+    .mud-dialog-fullscreen .mud-dialog-content {
+        padding: 12px;
+    }
+
+    .mud-table-container {
+        font-size: 0.875rem;
+    }
+}
