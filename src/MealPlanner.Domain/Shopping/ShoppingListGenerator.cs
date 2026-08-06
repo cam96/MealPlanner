@@ -67,35 +67,52 @@ public static class ShoppingListGenerator
             foreach (var meal in day.Meals)
             {
                 var recipe = meal.Recipe;
-                if (recipe is null)
+                if (recipe is not null)
                 {
-                    continue;
+                    var scale = Math.Max(1, meal.Servings) / (double)Math.Max(1, recipe.Servings);
+                    foreach (var recipeLine in recipe.Ingredients)
+                    {
+                        var ingredient = recipeLine.Ingredient;
+                        if (ingredient is null)
+                        {
+                            continue;
+                        }
+
+                        if (!required.TryGetValue(recipeLine.IngredientId, out var acc))
+                        {
+                            acc = new RequirementAccumulator(ingredient);
+                            required[recipeLine.IngredientId] = acc;
+                        }
+
+                        acc.RecipeIds.Add(recipe.Id);
+                        if (UnitConverter.TryToBaseUnits(
+                                ingredient.BaseUnit, ingredient.ServingWeightG, recipeLine.Quantity, recipeLine.Unit, out var baseQty))
+                        {
+                            acc.Quantity += baseQty * scale;
+                        }
+                        else
+                        {
+                            acc.HasUnconvertible = true;
+                        }
+                    }
                 }
 
-                var scale = Math.Max(1, meal.Servings) / (double)Math.Max(1, recipe.Servings);
-                foreach (var recipeLine in recipe.Ingredients)
+                var combo = meal.MealCombo;
+                if (combo is not null)
                 {
-                    var ingredient = recipeLine.Ingredient;
-                    if (ingredient is null)
+                    if (combo.ProteinIngredient is not null)
                     {
-                        continue;
+                        AccumulateComboIngredient(required, combo.ProteinIngredient);
                     }
 
-                    if (!required.TryGetValue(recipeLine.IngredientId, out var acc))
+                    if (combo.CarbohydrateIngredient is not null)
                     {
-                        acc = new RequirementAccumulator(ingredient);
-                        required[recipeLine.IngredientId] = acc;
+                        AccumulateComboIngredient(required, combo.CarbohydrateIngredient);
                     }
 
-                    acc.RecipeIds.Add(recipe.Id);
-                    if (UnitConverter.TryToBaseUnits(
-                            ingredient.BaseUnit, ingredient.ServingWeightG, recipeLine.Quantity, recipeLine.Unit, out var baseQty))
+                    if (combo.VegetableIngredient is not null)
                     {
-                        acc.Quantity += baseQty * scale;
-                    }
-                    else
-                    {
-                        acc.HasUnconvertible = true;
+                        AccumulateComboIngredient(required, combo.VegetableIngredient);
                     }
                 }
             }
@@ -198,6 +215,19 @@ public static class ShoppingListGenerator
             .OrderByDescending(p => p.IsPreferredStore)
             .ThenByDescending(p => p.RecordedDate)
             .FirstOrDefault();
+
+    private static void AccumulateComboIngredient(Dictionary<int, RequirementAccumulator> required, Ingredient ingredient)
+    {
+        if (!required.TryGetValue(ingredient.Id, out var acc))
+        {
+            acc = new RequirementAccumulator(ingredient);
+            required[ingredient.Id] = acc;
+        }
+
+        // Combos carry no explicit quantities; mark as unconvertible so the line
+        // always appears on the shopping list with an estimated-cost flag.
+        acc.HasUnconvertible = true;
+    }
 
     private sealed class RequirementAccumulator(Ingredient ingredient)
     {

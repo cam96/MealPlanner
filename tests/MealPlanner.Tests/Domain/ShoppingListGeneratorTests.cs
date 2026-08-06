@@ -254,4 +254,139 @@ public class ShoppingListGeneratorTests
             Assert.Throws<ArgumentNullException>(() => ShoppingListGenerator.Generate(new MealPlan(), [], null!));
         });
     }
+
+    // ---- MealCombo tests -----------------------------------------------------------------------
+
+    private static Ingredient Chicken() => new() { Id = 10, Name = "Chicken", BaseUnit = MeasurementUnit.Gram };
+    private static Ingredient Rice() => new() { Id = 11, Name = "Rice", BaseUnit = MeasurementUnit.Gram };
+    private static Ingredient Broccoli() => new() { Id = 12, Name = "Broccoli", BaseUnit = MeasurementUnit.Gram };
+
+    private static MealPlan PlanWithCombo(MealCombo combo) => new()
+    {
+        Year = 2026,
+        Month = 1,
+        Days =
+        {
+            new DayPlan
+            {
+                Date = new DateOnly(2026, 1, 5),
+                DayType = DayType.Normal,
+                Meals =
+                {
+                    new PlannedMeal
+                    {
+                        Slot = MealType.Dinner,
+                        Assignee = MealAssignee.Shared,
+                        MealCombo = combo,
+                        MealComboId = combo.Id,
+                        Servings = 1,
+                    },
+                },
+            },
+        },
+    };
+
+    [Test]
+    public void Generate_ComboMeal_IncludesAllThreeIngredients()
+    {
+        var chicken = Chicken();
+        var rice = Rice();
+        var broccoli = Broccoli();
+        var combo = new MealCombo
+        {
+            Id = 1,
+            Name = "Chicken rice bowl",
+            ProteinIngredient = chicken,
+            ProteinIngredientId = chicken.Id,
+            CarbohydrateIngredient = rice,
+            CarbohydrateIngredientId = rice.Id,
+            VegetableIngredient = broccoli,
+            VegetableIngredientId = broccoli.Id,
+        };
+
+        var list = ShoppingListGenerator.Generate(PlanWithCombo(combo), [], []);
+
+        var names = list.Lines.Select(l => l.IngredientName).ToHashSet();
+        Assert.Multiple(() =>
+        {
+            Assert.That(names, Contains.Item("Chicken"));
+            Assert.That(names, Contains.Item("Rice"));
+            Assert.That(names, Contains.Item("Broccoli"));
+        });
+    }
+
+    [Test]
+    public void Generate_ComboMeal_IngredientsMarkedCostEstimated()
+    {
+        var chicken = Chicken();
+        var rice = Rice();
+        var broccoli = Broccoli();
+        var combo = new MealCombo
+        {
+            Id = 1,
+            Name = "Full combo",
+            ProteinIngredient = chicken,
+            ProteinIngredientId = chicken.Id,
+            CarbohydrateIngredient = rice,
+            CarbohydrateIngredientId = rice.Id,
+            VegetableIngredient = broccoli,
+            VegetableIngredientId = broccoli.Id,
+        };
+
+        var list = ShoppingListGenerator.Generate(PlanWithCombo(combo), [], []);
+
+        Assert.That(list.Lines, Has.Count.EqualTo(3));
+        Assert.That(list.Lines, Has.All.Matches<ShoppingListLine>(l => l.IsCostEstimated));
+    }
+
+    [Test]
+    public void Generate_ComboMeal_NullIngredients_AreSkipped()
+    {
+        // Combo with only a protein set; carb and veg are null.
+        var chicken = Chicken();
+        var combo = new MealCombo
+        {
+            Id = 1,
+            Name = "Protein only",
+            ProteinIngredient = chicken,
+            ProteinIngredientId = chicken.Id,
+        };
+
+        var list = ShoppingListGenerator.Generate(PlanWithCombo(combo), [], []);
+
+        Assert.That(list.Lines, Has.Count.EqualTo(1));
+        Assert.That(list.Lines[0].IngredientName, Is.EqualTo("Chicken"));
+    }
+
+    [Test]
+    public void Generate_ComboMeal_NonNormalDay_IsExcluded()
+    {
+        var chicken = Chicken();
+        var combo = new MealCombo
+        {
+            Id = 1,
+            Name = "Chicken",
+            ProteinIngredient = chicken,
+            ProteinIngredientId = chicken.Id,
+        };
+
+        var plan = new MealPlan
+        {
+            Year = 2026,
+            Month = 1,
+            Days =
+            {
+                new DayPlan
+                {
+                    Date = new DateOnly(2026, 1, 5),
+                    DayType = DayType.EatingOut,
+                    Meals = { new PlannedMeal { Slot = MealType.Dinner, Assignee = MealAssignee.Shared, MealCombo = combo, MealComboId = combo.Id } },
+                },
+            },
+        };
+
+        var list = ShoppingListGenerator.Generate(plan, [], []);
+
+        Assert.That(list.Lines, Is.Empty);
+    }
 }
