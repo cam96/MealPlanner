@@ -1,6 +1,7 @@
 @page "/shopping-list"
 @using System.Globalization
 @using MealPlanner.Contracts
+@using MealPlanner.Contracts.Shopping
 @inject MealPlannerApiClient Api
 @inject ISnackbar Snackbar
 
@@ -59,20 +60,56 @@ else if (_list is not null)
         }
     </MudPaper>
 
-    @if (_list.Lines.Count == 0)
+    @* Add manual item form *@
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudTextField @bind-Value="_newItemName"
+                          Label="Add an item"
+                          Placeholder="e.g. Paper towels"
+                          Variant="Variant.Outlined"
+                          Immediate="true"
+                          OnKeyDown="OnAddItemKeyDownAsync"
+                          Style="flex: 1;" />
+            <MudNumericField @bind-Value="_newItemQuantity"
+                             Label="Qty"
+                             Variant="Variant.Outlined"
+                             Min="0.0"
+                             Style="max-width: 100px;" />
+            <MudSelect @bind-Value="_newItemUnit"
+                       Label="Unit"
+                       Variant="Variant.Outlined"
+                       Style="max-width: 100px;"
+                       Clearable="true">
+                <MudSelectItem Value="@((MeasurementUnit?)MeasurementUnit.Gram)">g</MudSelectItem>
+                <MudSelectItem Value="@((MeasurementUnit?)MeasurementUnit.Millilitre)">ml</MudSelectItem>
+                <MudSelectItem Value="@((MeasurementUnit?)MeasurementUnit.Each)">each</MudSelectItem>
+            </MudSelect>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       OnClick="AddManualItemAsync"
+                       Disabled="@string.IsNullOrWhiteSpace(_newItemName)"
+                       StartIcon="@Icons.Material.Filled.Add">
+                Add
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+
+    @* To Buy section *@
+    @if (ToBuyLines.Count == 0 && ToBuyManual.Count == 0)
     {
         <MudAlert Severity="Severity.Info">
-            Nothing to buy for this month yet. Plan some meals, or your pantry already covers everything.
+            Nothing left to buy! Plan some meals, add items manually, or your pantry already covers everything.
         </MudAlert>
     }
     else
     {
-        @foreach (var group in _list.Lines.GroupBy(l => l.StoreName ?? "Unpriced"))
+        @foreach (var group in ToBuyLines.GroupBy(l => l.StoreName ?? "Unpriced"))
         {
             <MudText Typo="Typo.h6" Class="mt-4 mb-2">@group.Key</MudText>
             <MudSimpleTable Hover="true" Dense="true" Elevation="1">
                 <thead>
                     <tr>
+                        <th style="width: 48px;"></th>
                         <th>Ingredient</th>
                         <th style="text-align:right;">To buy</th>
                         <th style="text-align:right;">Packages</th>
@@ -84,6 +121,12 @@ else if (_list is not null)
                     @foreach (var line in group)
                     {
                         <tr>
+                            <td>
+                                <MudCheckBox T="bool"
+                                             Value="false"
+                                             ValueChanged="@(_ => ToggleGeneratedCartAsync(line.IngredientId))"
+                                             Color="Color.Primary" />
+                            </td>
                             <td>@line.IngredientName</td>
                             <td style="text-align:right;">
                                 @line.ToBuyQuantity.ToString("0.#") @UnitLabel(line.Unit)
@@ -123,6 +166,124 @@ else if (_list is not null)
                 </tbody>
             </MudSimpleTable>
         }
+
+        @if (ToBuyManual.Count > 0)
+        {
+            <MudText Typo="Typo.h6" Class="mt-4 mb-2">Other items</MudText>
+            <MudSimpleTable Hover="true" Dense="true" Elevation="1">
+                <thead>
+                    <tr>
+                        <th style="width: 48px;"></th>
+                        <th>Item</th>
+                        <th style="text-align:right;">Quantity</th>
+                        <th style="width: 48px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in ToBuyManual)
+                    {
+                        <tr>
+                            <td>
+                                <MudCheckBox T="bool"
+                                             Value="false"
+                                             ValueChanged="@(_ => ToggleManualCartAsync(item.Id))"
+                                             Color="Color.Primary" />
+                            </td>
+                            <td>@item.Name</td>
+                            <td style="text-align:right;">
+                                @if (item.Quantity.HasValue)
+                                {
+                                    @item.Quantity.Value.ToString("0.#")
+                                    @if (item.Unit.HasValue)
+                                    {
+                                        @(" ")@UnitLabel(item.Unit.Value)
+                                    }
+                                }
+                                else
+                                {
+                                    <text>-</text>
+                                }
+                            </td>
+                            <td>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Size="Size.Small"
+                                               OnClick="@(() => DeleteManualItemAsync(item.Id))" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    }
+
+    @* In the Cart section *@
+    @if (HasCartItems)
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mt-6 mb-2">
+            <MudText Typo="Typo.h5">
+                <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Class="mr-1" />
+                In the cart
+            </MudText>
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.RemoveShoppingCart"
+                       OnClick="ClearCartAsync">
+                Clear cart
+            </MudButton>
+        </MudStack>
+
+        <MudSimpleTable Hover="true" Dense="true" Elevation="1">
+            <thead>
+                <tr>
+                    <th style="width: 48px;"></th>
+                    <th>Item</th>
+                    <th style="text-align:right;">Quantity</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in InCartLines)
+                {
+                    <tr style="opacity: 0.6;">
+                        <td>
+                            <MudCheckBox T="bool"
+                                         Value="true"
+                                         ValueChanged="@(_ => ToggleGeneratedCartAsync(line.IngredientId))"
+                                         Color="Color.Primary" />
+                        </td>
+                        <td><s>@line.IngredientName</s></td>
+                        <td style="text-align:right;">
+                            @line.ToBuyQuantity.ToString("0.#") @UnitLabel(line.Unit)
+                        </td>
+                    </tr>
+                }
+                @foreach (var item in InCartManual)
+                {
+                    <tr style="opacity: 0.6;">
+                        <td>
+                            <MudCheckBox T="bool"
+                                         Value="true"
+                                         ValueChanged="@(_ => ToggleManualCartAsync(item.Id))"
+                                         Color="Color.Primary" />
+                        </td>
+                        <td><s>@item.Name</s></td>
+                        <td style="text-align:right;">
+                            @if (item.Quantity.HasValue)
+                            {
+                                @item.Quantity.Value.ToString("0.#")
+                                @if (item.Unit.HasValue)
+                                {
+                                    @(" ")@UnitLabel(item.Unit.Value)
+                                }
+                            }
+                            else
+                            {
+                                <text>-</text>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
     }
 }
 
@@ -134,6 +295,10 @@ else if (_list is not null)
     private int _year = DateTime.Today.Year;
     private int _month = DateTime.Today.Month;
 
+    private string _newItemName = string.Empty;
+    private double? _newItemQuantity;
+    private MeasurementUnit? _newItemUnit;
+
     private string MonthLabel =>
         new DateOnly(_year, _month, 1).ToString("MMMM yyyy", CultureInfo.CurrentCulture);
 
@@ -141,6 +306,20 @@ else if (_list is not null)
         _list is null || _list.MonthlyBudget <= 0
             ? 0
             : Math.Min(100, (double)(_list.EstimatedTotal / _list.MonthlyBudget) * 100);
+
+    private List<ShoppingListLineDto> ToBuyLines =>
+        _list?.Lines.Where(l => !l.IsInCart).ToList() ?? [];
+
+    private List<ManualShoppingItemDto> ToBuyManual =>
+        _list?.ManualItems.Where(m => !m.IsInCart).ToList() ?? [];
+
+    private List<ShoppingListLineDto> InCartLines =>
+        _list?.Lines.Where(l => l.IsInCart).ToList() ?? [];
+
+    private List<ManualShoppingItemDto> InCartManual =>
+        _list?.ManualItems.Where(m => m.IsInCart).ToList() ?? [];
+
+    private bool HasCartItems => InCartLines.Count > 0 || InCartManual.Count > 0;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -175,6 +354,89 @@ else if (_list is not null)
         _year = next.Year;
         _month = next.Month;
         await LoadAsync();
+    }
+
+    private async Task OnAddItemKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_newItemName))
+        {
+            await AddManualItemAsync();
+        }
+    }
+
+    private async Task AddManualItemAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newItemName))
+        {
+            return;
+        }
+
+        try
+        {
+            var request = new AddManualShoppingItemRequest(_newItemName, _newItemQuantity, _newItemUnit);
+            await Api.AddManualShoppingItemAsync(_year, _month, request);
+            _newItemName = string.Empty;
+            _newItemQuantity = null;
+            _newItemUnit = null;
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not add the item.", Severity.Error);
+        }
+    }
+
+    private async Task DeleteManualItemAsync(int id)
+    {
+        try
+        {
+            await Api.DeleteManualShoppingItemAsync(_year, _month, id);
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not delete the item.", Severity.Error);
+        }
+    }
+
+    private async Task ToggleGeneratedCartAsync(int ingredientId)
+    {
+        try
+        {
+            await Api.ToggleGeneratedItemCartAsync(_year, _month, ingredientId);
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not update the cart.", Severity.Error);
+        }
+    }
+
+    private async Task ToggleManualCartAsync(int id)
+    {
+        try
+        {
+            await Api.ToggleManualItemCartAsync(_year, _month, id);
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not update the cart.", Severity.Error);
+        }
+    }
+
+    private async Task ClearCartAsync()
+    {
+        try
+        {
+            await Api.ClearShoppingCartAsync(_year, _month);
+            await LoadAsync();
+            Snackbar.Add("Cart cleared.", Severity.Success);
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not clear the cart.", Severity.Error);
+        }
     }
 
     private static string UnitLabel(MeasurementUnit unit) => unit switch

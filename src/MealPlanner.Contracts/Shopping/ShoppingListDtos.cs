@@ -16,6 +16,7 @@ namespace MealPlanner.Contracts.Shopping;
 /// <param name="IsBulk">Whether a single package substantially exceeds the quantity needed.</param>
 /// <param name="IsDeal">Whether the latest price is a deal versus the historical average.</param>
 /// <param name="PercentBelowAverage">How far the latest price sits below the average, as a percentage.</param>
+/// <param name="IsInCart">Whether the item has been placed in the cart (checked off).</param>
 public record ShoppingListLineDto(
     int IngredientId,
     string IngredientName,
@@ -31,12 +32,36 @@ public record ShoppingListLineDto(
     bool IsShared,
     bool IsBulk,
     bool IsDeal,
-    double PercentBelowAverage);
+    double PercentBelowAverage,
+    bool IsInCart);
+
+/// <summary>A user-added item on the shopping list, not derived from a meal plan.</summary>
+/// <param name="Id">The manual item identifier.</param>
+/// <param name="Name">The free-text item name.</param>
+/// <param name="Quantity">An optional quantity to buy.</param>
+/// <param name="Unit">The unit the quantity is expressed in, when specified.</param>
+/// <param name="IsInCart">Whether the item has been placed in the cart (checked off).</param>
+public record ManualShoppingItemDto(
+    int Id,
+    string Name,
+    double? Quantity,
+    MeasurementUnit? Unit,
+    bool IsInCart);
+
+/// <summary>Payload to add a manual item to the shopping list.</summary>
+/// <param name="Name">The free-text item name.</param>
+/// <param name="Quantity">An optional quantity to buy.</param>
+/// <param name="Unit">The unit the quantity is expressed in, when specified.</param>
+public record AddManualShoppingItemRequest(
+    string Name,
+    double? Quantity,
+    MeasurementUnit? Unit);
 
 /// <summary>A generated shopping list for a month's plan, compared against the budget.</summary>
 /// <param name="Year">The calendar year.</param>
 /// <param name="Month">The calendar month (1-12).</param>
 /// <param name="Lines">The ingredient rows to buy, ordered by store then name.</param>
+/// <param name="ManualItems">User-added items not derived from the meal plan.</param>
 /// <param name="EstimatedTotal">The total estimated cost of the list, in Canadian dollars.</param>
 /// <param name="IsEstimated">Whether any line's cost is estimated or unpriced.</param>
 /// <param name="MonthlyBudget">The household's configured monthly grocery budget.</param>
@@ -46,6 +71,7 @@ public record ShoppingListDto(
     int Year,
     int Month,
     IReadOnlyList<ShoppingListLineDto> Lines,
+    IReadOnlyList<ManualShoppingItemDto> ManualItems,
     decimal EstimatedTotal,
     bool IsEstimated,
     decimal MonthlyBudget,

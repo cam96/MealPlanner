@@ -5,6 +5,7 @@ using MealPlanner.Contracts.People;
 using MealPlanner.Contracts.Planning;
 using MealPlanner.Contracts.Prices;
 using MealPlanner.Contracts.Recipes;
+using MealPlanner.Contracts.Shopping;
 using MealPlanner.Contracts.Stores;
 using MealPlanner.Domain.Costing;
 using MealPlanner.Domain.Entities;
@@ -391,5 +392,23 @@ internal static class EntityMappings
         combo.ProteinIngredientId = request.ProteinIngredientId;
         combo.CarbohydrateIngredientId = request.CarbohydrateIngredientId;
         combo.VegetableIngredientId = request.VegetableIngredientId;
+    }
+
+    // -- ManualShoppingItem ---------------------------------------------------------------------
+
+    /// <summary>Projects a <see cref="ManualShoppingItem"/> to a <see cref="ManualShoppingItemDto"/>.</summary>
+    public static ManualShoppingItemDto ToDto(this ManualShoppingItem item) => new(
+        item.Id,
+        item.Name,
+        item.Quantity,
+        item.Unit?.ToContract(),
+        item.IsInCart);
+
+    /// <summary>Applies a create request onto a <see cref="ManualShoppingItem"/> entity.</summary>
+    public static void Apply(this ManualShoppingItem item, AddManualShoppingItemRequest request)
+    {
+        item.Name = request.Name.Trim();
+        item.Quantity = request.Quantity;
+        item.Unit = request.Unit?.ToDomain();
     }
 }
