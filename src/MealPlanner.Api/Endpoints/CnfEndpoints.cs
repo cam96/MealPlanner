@@ -11,7 +11,7 @@ namespace MealPlanner.Api.Endpoints;
 /// </summary>
 public static class CnfEndpoints
 {
-    private const int MaxSearchResults = 25;
+    private const int MaxSearchResults = 50;
 
     /// <summary>Registers the CNF lookup endpoints on the given route builder.</summary>
     /// <param name="app">The endpoint route builder.</param>

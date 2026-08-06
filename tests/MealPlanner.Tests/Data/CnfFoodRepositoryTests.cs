@@ -83,6 +83,22 @@ public class CnfFoodRepositoryTests
     }
 
     [Test]
+    public void Search_MultiWordQuery_RequiresAllTermsToMatch()
+    {
+        WriteSampleDataset();
+        var repository = new CnfFoodRepository(new CnfOptions { Directory = _directory });
+
+        // "chop meat" should match "Chop suey, with meat, canned" (both words present).
+        var results = repository.Search("chop meat", maxResults: 10);
+        Assert.That(results, Has.Count.EqualTo(1));
+        Assert.That(results[0].Description, Is.EqualTo("Chop suey, with meat, canned"));
+
+        // "chop cheese" should match nothing (cheese is in a different food).
+        var noResults = repository.Search("chop cheese", maxResults: 10);
+        Assert.That(noResults, Is.Empty);
+    }
+
+    [Test]
     public void GetByFoodCode_ReturnsNull_WhenUnknown()
     {
         WriteSampleDataset();
