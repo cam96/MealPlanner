@@ -58,3 +58,50 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* Mobile-first utilities */
+.fab-bottom-right {
+    position: fixed !important;
+    bottom: 24px;
+    right: 24px;
+    z-index: 100;
+}
+
+.ingredient-search-bar {
+    position: sticky;
+    top: 64px;
+    z-index: 10;
+    background: var(--mud-palette-surface);
+}
+
+.ingredient-card,
+.price-card {
+    cursor: pointer;
+}
+
+.fw-bold {
+    font-weight: 600;
+}
+
+.flex-wrap {
+    flex-wrap: wrap;
+}
+
+@media (max-width: 599.98px) {
+    .mud-dialog-fullscreen .mud-dialog-content {
+        padding: 12px;
+    }
+
+    .mud-table-container {
+        font-size: 0.875rem;
+    }
+
+    .fab-bottom-right {
+        bottom: 16px;
+        right: 16px;
+    }
+
+    .ingredient-search-bar {
+        top: 56px;
+    }
+}

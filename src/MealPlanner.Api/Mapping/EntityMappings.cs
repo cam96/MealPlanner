@@ -218,6 +218,20 @@ internal static class EntityMappings
         price.IsEstimated,
         price.IsPreferredStore);
 
+    /// <summary>Projects an <see cref="IngredientPrice"/> to a <see cref="RecentPriceDto"/> including the ingredient name.</summary>
+    public static RecentPriceDto ToRecentDto(this IngredientPrice price) => new(
+        price.Id,
+        price.IngredientId,
+        price.Ingredient?.Name ?? string.Empty,
+        price.StoreId,
+        price.Store?.Name ?? string.Empty,
+        price.Price,
+        price.PackageQuantity,
+        price.PackageUnit.ToContract(),
+        price.RecordedDate,
+        price.IsEstimated,
+        price.IsPreferredStore);
+
     /// <summary>Applies a save request onto an <see cref="IngredientPrice"/> entity.</summary>
     public static void Apply(this IngredientPrice price, SaveIngredientPriceRequest request)
     {
