@@ -54,10 +54,11 @@ public sealed class CnfFoodRepository : ICnfFoodRepository
             return [];
         }
 
-        var term = query.Trim();
+        var trimmedQuery = query.Trim();
+        var terms = trimmedQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         return [.. _dataset.Value.Foods
-            .Where(f => f.Description.Contains(term, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(f => f.Description.StartsWith(term, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .Where(f => terms.All(t => f.Description.Contains(t, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(f => f.Description.StartsWith(trimmedQuery, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
             .ThenBy(f => f.Description.Length)
             .ThenBy(f => f.Description, StringComparer.OrdinalIgnoreCase)
             .Take(maxResults)];
