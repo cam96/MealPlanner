@@ -15,8 +15,8 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /data /backups \
-    && chown app:app /data /backups
+    && mkdir -p /data /data/cnf /backups \
+    && chown app:app /data /data/cnf /backups
 
 COPY --from=build /app .
 
