@@ -282,11 +282,13 @@
 
     private async Task DeletePriceAsync(RecentPriceDto price)
     {
-        var confirmed = await DialogService.ShowMessageBox(
-            "Delete price",
-            $"Delete the {price.Price:C2} price for {price.IngredientName} at {price.StoreName}?",
-            yesText: "Delete",
-            cancelText: "Cancel");
+        var confirmed = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Delete price",
+            MarkupMessage = new MarkupString($"Delete the {price.Price:C2} price for {price.IngredientName} at {price.StoreName}?"),
+            YesText = "Delete",
+            CancelText = "Cancel",
+        });
 
         if (confirmed != true)
         {
