@@ -314,7 +314,7 @@ else if (_plan is not null)
             { x => x.FirstPersonName, FirstPersonName },
             { x => x.SecondPersonName, SecondPersonName },
         };
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var options = DialogHelper.FormDialog();
         var dialog = await DialogService.ShowAsync<PlannedMealDialog>("Add meal", parameters, options);
         var result = await dialog.Result;
 
@@ -336,7 +336,7 @@ else if (_plan is not null)
             { x => x.FirstPersonName, FirstPersonName },
             { x => x.SecondPersonName, SecondPersonName },
         };
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var options = DialogHelper.FormDialog();
         var dialog = await DialogService.ShowAsync<PlannedMealDialog>("Edit meal", parameters, options);
         var result = await dialog.Result;
 
@@ -356,7 +356,7 @@ else if (_plan is not null)
     private async Task EditDayAsync(DayPlanDto day)
     {
         var parameters = new DialogParameters<DayPlanDialog> { { x => x.Day, day } };
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var options = DialogHelper.FormDialog();
         var dialog = await DialogService.ShowAsync<DayPlanDialog>("Edit day", parameters, options);
         var result = await dialog.Result;
 

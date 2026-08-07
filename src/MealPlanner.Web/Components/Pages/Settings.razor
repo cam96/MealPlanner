@@ -121,7 +121,8 @@
     {
         var parameters = new DialogParameters<StoreDialog> { { x => x.Existing, existing } };
         var title = existing is null ? "Add store" : "Edit store";
-        var dialog = await DialogService.ShowAsync<StoreDialog>(title, parameters);
+        var options = DialogHelper.FormDialog();
+        var dialog = await DialogService.ShowAsync<StoreDialog>(title, parameters, options);
         var result = await dialog.Result;
 
         if (result is null || result.Canceled || result.Data is not SaveStoreRequest request)
