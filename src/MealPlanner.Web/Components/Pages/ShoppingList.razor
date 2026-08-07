@@ -96,6 +96,9 @@ else if (_list is not null)
                             <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
                                            Size="Size.Small"
                                            OnClick="@(() => ShowPricesAsync(line.IngredientId, line.IngredientName))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.AddCard"
+                                           Size="Size.Small"
+                                           OnClick="@(() => RecordPriceForIngredientAsync(line.IngredientId, line.IngredientName))" />
                         </MudStack>
                     </MudPaper>
                 }
@@ -181,8 +184,8 @@ else if (_list is not null)
         @* Manual items *@
         @if (ToBuyManual.Count > 0)
         {
-            <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1 d-block d-md-none mud-text-secondary">Other items</MudText>
-            <MudText Typo="Typo.h6" Class="mt-4 mb-2 d-none d-md-block">Other items</MudText>
+            <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1 d-block d-md-none mud-text-secondary">On the shelf</MudText>
+            <MudText Typo="Typo.h6" Class="mt-4 mb-2 d-none d-md-block">On the shelf</MudText>
 
             @* Mobile *@
             <div class="d-block d-md-none">
@@ -211,6 +214,9 @@ else if (_list is not null)
                                 <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
                                                Size="Size.Small"
                                                OnClick="@(() => ShowPricesAsync(item.IngredientId.Value, item.Name))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.AddCard"
+                                               Size="Size.Small"
+                                               OnClick="@(() => RecordPriceForIngredientAsync(item.IngredientId.Value, item.Name))" />
                             }
                             <MudIconButton Icon="@Icons.Material.Filled.Edit"
                                            Size="Size.Small"
