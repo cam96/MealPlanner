@@ -13,12 +13,13 @@
                              ValueChanged="OnIngredientSelected"
                              SearchFunc="SearchIngredientsAsync"
                              ToStringFunc="@(i => i?.Name ?? string.Empty)"
+                             Text="@_searchText"
+                             TextChanged="OnSearchTextChanged"
                              ResetValueOnEmptyText="true"
                              CoerceText="false"
                              CoerceValue="false"
                              Adornment="Adornment.Start"
                              AdornmentIcon="@Icons.Material.Filled.Search"
-                             TextChanged="OnSearchTextChanged"
                              Class="mb-3">
                 <NoItemsTemplate>
                     <MudText Typo="Typo.body2" Class="pa-2">
