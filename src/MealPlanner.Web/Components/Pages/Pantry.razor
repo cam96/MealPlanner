@@ -7,15 +7,7 @@
 
 <PageTitle>Pantry - MealPlanner</PageTitle>
 
-<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
-    <MudText Typo="Typo.h4">Pantry &amp; freezer</MudText>
-    <MudButton Variant="Variant.Filled"
-               Color="Color.Primary"
-               StartIcon="@Icons.Material.Filled.Add"
-               OnClick="@(() => OpenEditorAsync(null))">
-        Add item
-    </MudButton>
-</MudStack>
+<MudText Typo="Typo.h4" Class="mb-4">Pantry &amp; freezer</MudText>
 
 <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
     Track what you already have on hand so meal plans and shopping lists don't double-buy.
@@ -67,6 +59,12 @@
         }
     </NoRecordsContent>
 </MudDataGrid>
+
+@* FAB — always reachable for adding *@
+<MudFab StartIcon="@Icons.Material.Filled.Add"
+        Color="Color.Primary"
+        Class="fab-bottom-right"
+        OnClick="@(() => OpenEditorAsync(null))" />
 
 @code {
     private IReadOnlyList<PantryItemDto> _items = [];
