@@ -1,0 +1,117 @@
+@using MealPlanner.Contracts
+@using MealPlanner.Contracts.Ingredients
+@using MealPlanner.Contracts.Shopping
+@inject MealPlannerApiClient Api
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudAutocomplete T="IngredientDto"
+                             Label="Item name"
+                             Placeholder="Search ingredients or type a custom name"
+                             Value="_model.Ingredient"
+                             ValueChanged="OnIngredientSelected"
+                             SearchFunc="SearchIngredientsAsync"
+                             ToStringFunc="@(i => i?.Name ?? string.Empty)"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="false"
+                             CoerceValue="false"
+                             Adornment="Adornment.Start"
+                             AdornmentIcon="@Icons.Material.Filled.Search"
+                             TextChanged="OnSearchTextChanged"
+                             Class="mb-3">
+                <NoItemsTemplate>
+                    <MudText Typo="Typo.body2" Class="pa-2">
+                        No matches — will be added as custom text.
+                    </MudText>
+                </NoItemsTemplate>
+            </MudAutocomplete>
+
+            <MudStack Row="true" Spacing="2">
+                <MudNumericField @bind-Value="_model.Quantity"
+                                 Label="Quantity"
+                                 Min="0.0"
+                                 Style="flex: 1;" />
+                <MudSelect @bind-Value="_model.Unit"
+                           Label="Unit"
+                           Clearable="true"
+                           Style="width: 120px;">
+                    <MudSelectItem Value="@((MeasurementUnit?)MeasurementUnit.Gram)">g</MudSelectItem>
+                    <MudSelectItem Value="@((MeasurementUnit?)MeasurementUnit.Millilitre)">ml</MudSelectItem>
+                    <MudSelectItem Value="@((MeasurementUnit?)MeasurementUnit.Each)">each</MudSelectItem>
+                </MudSelect>
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync">Add</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private readonly ShoppingItemModel _model = new();
+    private string _searchText = string.Empty;
+
+    /// <summary>The dialog instance used to return a result.</summary>
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private bool CanSubmit =>
+        _model.Ingredient is not null || !string.IsNullOrWhiteSpace(_searchText);
+
+    private async Task<IEnumerable<IngredientDto>> SearchIngredientsAsync(string? value, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        return await Api.SearchIngredientsAsync(value, 10, ct);
+    }
+
+    private void OnIngredientSelected(IngredientDto? ingredient)
+    {
+        _model.Ingredient = ingredient;
+        if (ingredient is not null)
+        {
+            _searchText = ingredient.Name;
+        }
+    }
+
+    private void OnSearchTextChanged(string text)
+    {
+        _searchText = text ?? string.Empty;
+        if (_model.Ingredient is not null && _model.Ingredient.Name != text)
+        {
+            _model.Ingredient = null;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+        if (!CanSubmit)
+        {
+            return;
+        }
+
+        var name = _model.Ingredient?.Name ?? _searchText.Trim();
+        var ingredientId = _model.Ingredient?.Id;
+        var request = new AddManualShoppingItemRequest(name, ingredientId, _model.Quantity, _model.Unit);
+
+        MudDialog.Close(DialogResult.Ok(request));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private sealed class ShoppingItemModel
+    {
+        public IngredientDto? Ingredient { get; set; }
+
+        public double? Quantity { get; set; }
+
+        public MeasurementUnit? Unit { get; set; }
+    }
+}

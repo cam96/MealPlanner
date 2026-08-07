@@ -56,60 +56,6 @@ else if (_list is not null)
         }
     </MudPaper>
 
-    @* Add item form — stacks on mobile *@
-    <MudPaper Class="pa-3 mb-3" Elevation="1">
-        <MudStack Spacing="2">
-            <MudAutocomplete T="IngredientDto"
-                             Label="Add an item"
-                             Placeholder="Search ingredients or type a name"
-                             Value="_selectedIngredient"
-                             ValueChanged="OnIngredientSelected"
-                             SearchFunc="SearchIngredientsAsync"
-                             ToStringFunc="@(i => i?.Name ?? string.Empty)"
-                             ResetValueOnEmptyText="true"
-                             CoerceText="false"
-                             CoerceValue="false"
-                             Variant="Variant.Outlined"
-                             Adornment="Adornment.Start"
-                             AdornmentIcon="@Icons.Material.Filled.Search"
-                             Margin="Margin.Dense"
-                             TextChanged="OnSearchTextChanged"
-                             OnKeyDown="OnAddItemKeyDownAsync">
-                <NoItemsTemplate>
-                    <MudText Typo="Typo.body2" Class="pa-2">
-                        No matches — press <b>Add</b> for custom text.
-                    </MudText>
-                </NoItemsTemplate>
-            </MudAutocomplete>
-            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-                <MudNumericField @bind-Value="_newItemQuantity"
-                                 Label="Qty"
-                                 Variant="Variant.Outlined"
-                                 Margin="Margin.Dense"
-                                 Min="0.0"
-                                 Style="max-width: 90px;" />
-                <MudSelect @bind-Value="_newItemUnit"
-                           Label="Unit"
-                           Variant="Variant.Outlined"
-                           Margin="Margin.Dense"
-                           Style="max-width: 90px;"
-                           Clearable="true">
-                    <MudSelectItem Value="@((MeasurementUnit?)MeasurementUnit.Gram)">g</MudSelectItem>
-                    <MudSelectItem Value="@((MeasurementUnit?)MeasurementUnit.Millilitre)">ml</MudSelectItem>
-                    <MudSelectItem Value="@((MeasurementUnit?)MeasurementUnit.Each)">each</MudSelectItem>
-                </MudSelect>
-                <MudButton Variant="Variant.Filled"
-                           Color="Color.Primary"
-                           OnClick="AddManualItemAsync"
-                           Disabled="@(!CanAddItem)"
-                           StartIcon="@Icons.Material.Filled.Add"
-                           Size="Size.Small">
-                    Add
-                </MudButton>
-            </MudStack>
-        </MudStack>
-    </MudPaper>
-
     @* To Buy section *@
     @if (ToBuyLines.Count == 0 && ToBuyManual.Count == 0)
     {
@@ -437,11 +383,11 @@ else if (_list is not null)
     }
 }
 
-@* FAB — quick-record price *@
-<MudFab StartIcon="@Icons.Material.Filled.AddCard"
+@* FAB — add shopping list item *@
+<MudFab StartIcon="@Icons.Material.Filled.Add"
         Color="Color.Primary"
         Class="fab-bottom-right"
-        OnClick="RecordPriceWithPickerAsync" />
+        OnClick="OpenAddItemDialogAsync" />
 
 @code {
     private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("en-CA");
@@ -451,13 +397,6 @@ else if (_list is not null)
     private bool _loading = true;
     private int _year = DateTime.Today.Year;
     private int _month = DateTime.Today.Month;
-
-    private IngredientDto? _selectedIngredient;
-    private string _searchText = string.Empty;
-    private double? _newItemQuantity;
-    private MeasurementUnit? _newItemUnit;
-
-    private bool CanAddItem => _selectedIngredient is not null || !string.IsNullOrWhiteSpace(_searchText);
 
     private string MonthLabel =>
         new DateOnly(_year, _month, 1).ToString("MMMM yyyy", CultureInfo.CurrentCulture);
@@ -520,59 +459,21 @@ else if (_list is not null)
         await LoadAsync();
     }
 
-    private async Task<IEnumerable<IngredientDto>> SearchIngredientsAsync(string value, CancellationToken ct)
+    private async Task OpenAddItemDialogAsync()
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return [];
-        }
+        var options = DialogHelper.FormDialog();
+        var dialog = await DialogService.ShowAsync<AddShoppingItemDialog>("Add item", options);
+        var result = await dialog.Result;
 
-        return await Api.SearchIngredientsAsync(value, 10, ct);
-    }
-
-    private void OnIngredientSelected(IngredientDto? ingredient)
-    {
-        _selectedIngredient = ingredient;
-        if (ingredient is not null)
-        {
-            _searchText = ingredient.Name;
-        }
-    }
-
-    private void OnSearchTextChanged(string text)
-    {
-        _searchText = text ?? string.Empty;
-        if (_selectedIngredient is not null && _selectedIngredient.Name != text)
-        {
-            _selectedIngredient = null;
-        }
-    }
-
-    private async Task OnAddItemKeyDownAsync(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter" && CanAddItem)
-        {
-            await AddManualItemAsync();
-        }
-    }
-
-    private async Task AddManualItemAsync()
-    {
-        if (!CanAddItem)
+        if (result is null || result.Canceled || result.Data is not AddManualShoppingItemRequest request)
         {
             return;
         }
 
         try
         {
-            var name = _selectedIngredient?.Name ?? _searchText.Trim();
-            var ingredientId = _selectedIngredient?.Id;
-            var request = new AddManualShoppingItemRequest(name, ingredientId, _newItemQuantity, _newItemUnit);
             await Api.AddManualShoppingItemAsync(_year, _month, request);
-            _selectedIngredient = null;
-            _searchText = string.Empty;
-            _newItemQuantity = null;
-            _newItemUnit = null;
+            Snackbar.Add("Item added.", Severity.Success);
             await LoadAsync();
         }
         catch (HttpRequestException)
@@ -694,41 +595,6 @@ else if (_list is not null)
         try
         {
             await Api.CreatePriceAsync(ingredientId, request);
-            Snackbar.Add("Price recorded.", Severity.Success);
-            await LoadAsync();
-        }
-        catch (HttpRequestException)
-        {
-            Snackbar.Add("Could not save the price.", Severity.Error);
-        }
-    }
-
-    private async Task RecordPriceWithPickerAsync()
-    {
-        if (_stores.Count == 0)
-        {
-            Snackbar.Add("Add a store under Settings before recording prices.", Severity.Info);
-            return;
-        }
-
-        var parameters = new DialogParameters<PriceDialog>
-        {
-            { x => x.Existing, null },
-            { x => x.Stores, _stores },
-            { x => x.ShowIngredientPicker, true },
-        };
-        var options = DialogHelper.FormDialog();
-        var dialog = await DialogService.ShowAsync<PriceDialog>("Record price", parameters, options);
-        var result = await dialog.Result;
-
-        if (result is null || result.Canceled || result.Data is not PriceDialogResult dialogResult)
-        {
-            return;
-        }
-
-        try
-        {
-            await Api.CreatePriceAsync(dialogResult.IngredientId, dialogResult.Request);
             Snackbar.Add("Price recorded.", Severity.Success);
             await LoadAsync();
         }
