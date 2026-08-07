@@ -767,6 +767,9 @@ else if (_list is not null)
     private static string UnitLabel(MeasurementUnit unit) => unit switch
     {
         MeasurementUnit.Millilitre => "ml",
+        MeasurementUnit.Litre => "L",
+        MeasurementUnit.Kilogram => "kg",
+        MeasurementUnit.Pound => "lbs",
         MeasurementUnit.Each => "each",
         _ => "g",
     };

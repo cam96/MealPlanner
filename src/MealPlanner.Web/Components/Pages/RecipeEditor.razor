@@ -89,7 +89,10 @@ else
                                              Style="width: 110px;" />
                             <MudSelect @bind-Value="line.Unit" Label="Unit" Style="width: 130px;">
                                 <MudSelectItem Value="MeasurementUnit.Gram">g</MudSelectItem>
+                                <MudSelectItem Value="MeasurementUnit.Kilogram">kg</MudSelectItem>
+                                <MudSelectItem Value="MeasurementUnit.Pound">lbs</MudSelectItem>
                                 <MudSelectItem Value="MeasurementUnit.Millilitre">ml</MudSelectItem>
+                                <MudSelectItem Value="MeasurementUnit.Litre">L</MudSelectItem>
                                 <MudSelectItem Value="MeasurementUnit.Each">each</MudSelectItem>
                             </MudSelect>
                             <MudIconButton Icon="@Icons.Material.Filled.Delete"
