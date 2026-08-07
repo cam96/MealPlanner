@@ -6,15 +6,7 @@
 
 <PageTitle>People - MealPlanner</PageTitle>
 
-<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
-    <MudText Typo="Typo.h4">People &amp; goals</MudText>
-    <MudButton Variant="Variant.Filled"
-               Color="Color.Primary"
-               StartIcon="@Icons.Material.Filled.PersonAdd"
-               OnClick="@(() => OpenEditorAsync(null))">
-        Add person
-    </MudButton>
-</MudStack>
+<MudText Typo="Typo.h5" Class="mb-2 d-none d-sm-block">People &amp; goals</MudText>
 
 <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
     Meals are planned to hit each person's daily nutrition targets.
@@ -48,6 +40,12 @@
         <MudText Class="pa-4">No people yet. Add the household members you're planning meals for.</MudText>
     </NoRecordsContent>
 </MudDataGrid>
+
+@* FAB — always reachable for adding *@
+<MudFab StartIcon="@Icons.Material.Filled.Add"
+        Color="Color.Primary"
+        Class="fab-bottom-right"
+        OnClick="@(() => OpenEditorAsync(null))" />
 
 @code {
     private IReadOnlyList<PersonDto> _people = [];
