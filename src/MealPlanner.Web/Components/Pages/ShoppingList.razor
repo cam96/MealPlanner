@@ -65,7 +65,7 @@ else if (_list is not null)
         </MudAlert>
     }
 
-    @* To Buy section *@
+    @* On the shelf section *@
     @if (ToBuyLines.Count == 0 && ToBuyManual.Count == 0)
     {
         <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
@@ -74,60 +74,119 @@ else if (_list is not null)
     }
     else
     {
-        @* Generated items — mobile card list *@
+        <MudText Typo="Typo.subtitle2" Class="mt-3 mb-1 d-block d-md-none mud-text-secondary">
+            <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Small" Class="mr-1" />
+            On the shelf
+        </MudText>
+        <MudText Typo="Typo.h6" Class="mt-4 mb-2 d-none d-md-block">
+            <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Small" Class="mr-1" />
+            On the shelf
+        </MudText>
+
+        @* Mobile card list *@
         <div class="d-block d-md-none">
-            @foreach (var group in ToBuyLines.GroupBy(l => l.StoreName ?? "Unpriced"))
+            @foreach (var line in ToBuyLines)
             {
-                <MudText Typo="Typo.subtitle2" Class="mt-3 mb-1 mud-text-secondary">@group.Key</MudText>
-                @foreach (var line in group)
-                {
-                    <MudPaper Class="pa-2 mb-1" Elevation="0" Outlined="true" @key="line.IngredientId">
-                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                            <MudCheckBox T="bool"
-                                         Value="line.IsInCart"
-                                         ValueChanged="@(_ => ToggleGeneratedCartAsync(line.IngredientId))"
-                                         Color="Color.Primary"
-                                         Dense="true" />
-                            <MudStack Spacing="0" Style="flex: 1; min-width: 0;">
-                                <MudText Typo="Typo.body2" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                    @line.IngredientName
+                <MudPaper Class="pa-2 mb-1" Elevation="0" Outlined="true" @key="@($"gen-{line.IngredientId}")">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudCheckBox T="bool"
+                                     Value="line.IsInCart"
+                                     ValueChanged="@(_ => ToggleGeneratedCartAsync(line.IngredientId))"
+                                     Color="Color.Primary"
+                                     Dense="true" />
+                        <MudStack Spacing="0" Style="flex: 1; min-width: 0;">
+                            <MudText Typo="Typo.body2" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                @line.IngredientName
+                            </MudText>
+                            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @line.ToBuyQuantity.ToString("0.#") @UnitLabel(line.Unit) · @line.EstimatedCost.ToString("C", Culture)@(line.IsCostEstimated ? "*" : "")
+                                    @if (!string.IsNullOrEmpty(line.StoreName))
+                                    {
+                                        @($" · {line.StoreName}")
+                                    }
                                 </MudText>
-                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                        @line.ToBuyQuantity.ToString("0.#") @UnitLabel(line.Unit) · @line.EstimatedCost.ToString("C", Culture)@(line.IsCostEstimated ? "*" : "")
-                                    </MudText>
-                                    @if (line.IsCostEstimated && line.EstimatedCost == 0)
-                                    {
-                                        <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" Color="Color.Warning" />
-                                    }
-                                    @if (line.IsDeal)
-                                    {
-                                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="pa-0" Style="height:18px;font-size:0.65rem;">Deal</MudChip>
-                                    }
-                                </MudStack>
+                                @if (line.IsCostEstimated && line.EstimatedCost == 0)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" Color="Color.Warning" />
+                                }
+                                @if (line.IsDeal)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="pa-0" Style="height:18px;font-size:0.65rem;">Deal</MudChip>
+                                }
                             </MudStack>
+                        </MudStack>
+                        <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
+                                       Size="Size.Small"
+                                       OnClick="@(() => ShowPricesAsync(line.IngredientId, line.IngredientName))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.AddCard"
+                                       Size="Size.Small"
+                                       OnClick="@(() => RecordPriceForIngredientAsync(line.IngredientId, line.IngredientName))" />
+                    </MudStack>
+                </MudPaper>
+            }
+            @foreach (var item in ToBuyManual)
+            {
+                <MudPaper Class="pa-2 mb-1" Elevation="0" Outlined="true" @key="@($"man-{item.Id}")">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudCheckBox T="bool"
+                                     Value="item.IsInCart"
+                                     ValueChanged="@(_ => ToggleManualCartAsync(item.Id))"
+                                     Color="Color.Primary"
+                                     Dense="true" />
+                        <MudStack Spacing="0" Style="flex: 1; min-width: 0;">
+                            <MudText Typo="Typo.body2" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                @item.Name
+                            </MudText>
+                            <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                @if (item.Quantity.HasValue)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        @item.Quantity.Value.ToString("0.#")@(item.Unit.HasValue ? $" {UnitLabel(item.Unit.Value)}" : "")
+                                    </MudText>
+                                }
+                                @if (item.EstimatedCost > 0)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        · @item.EstimatedCost.ToString("C", Culture)@(item.IsCostEstimated ? "*" : "")
+                                    </MudText>
+                                }
+                                else if (item.IsCostEstimated)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" Color="Color.Warning" />
+                                }
+                            </MudStack>
+                        </MudStack>
+                        @if (item.IngredientId.HasValue)
+                        {
                             <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
                                            Size="Size.Small"
-                                           OnClick="@(() => ShowPricesAsync(line.IngredientId, line.IngredientName))" />
+                                           OnClick="@(() => ShowPricesAsync(item.IngredientId.Value, item.Name))" />
                             <MudIconButton Icon="@Icons.Material.Filled.AddCard"
                                            Size="Size.Small"
-                                           OnClick="@(() => RecordPriceForIngredientAsync(line.IngredientId, line.IngredientName))" />
-                        </MudStack>
-                    </MudPaper>
-                }
+                                           OnClick="@(() => RecordPriceForIngredientAsync(item.IngredientId.Value, item.Name))" />
+                        }
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                       Size="Size.Small"
+                                       OnClick="@(() => EditManualItemAsync(item))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Size="Size.Small"
+                                       OnClick="@(() => DeleteManualItemAsync(item.Id))" />
+                    </MudStack>
+                </MudPaper>
             }
         </div>
 
-        @* Generated items — desktop table *@
+        @* Desktop table *@
         <div class="d-none d-md-block">
-            @foreach (var group in ToBuyLines.GroupBy(l => l.StoreName ?? "Unpriced"))
+            @if (ToBuyLines.Count > 0)
             {
-                <MudText Typo="Typo.h6" Class="mt-4 mb-2">@group.Key</MudText>
                 <MudSimpleTable Hover="true" Dense="true" Elevation="1">
                     <thead>
                         <tr>
                             <th style="width: 48px;"></th>
                             <th>Ingredient</th>
+                            <th>Store</th>
                             <th style="text-align:right;">To buy</th>
                             <th style="text-align:right;">Packages</th>
                             <th style="text-align:right;">Cost</th>
@@ -136,7 +195,7 @@ else if (_list is not null)
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var line in group)
+                        @foreach (var line in ToBuyLines)
                         {
                             <tr @key="line.IngredientId">
                                 <td>
@@ -146,6 +205,7 @@ else if (_list is not null)
                                                  Color="Color.Primary" />
                                 </td>
                                 <td>@line.IngredientName</td>
+                                <td>@(line.StoreName ?? "—")</td>
                                 <td style="text-align:right;">
                                     @line.ToBuyQuantity.ToString("0.#") @UnitLabel(line.Unit)
                                     @if (line.PantryQuantity > 0)
@@ -198,77 +258,10 @@ else if (_list is not null)
                     </tbody>
                 </MudSimpleTable>
             }
-        </div>
 
-        @* Manual items *@
-        @if (ToBuyManual.Count > 0)
-        {
-            <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1 d-block d-md-none mud-text-secondary">
-                <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Small" Class="mr-1" />
-                On the shelf
-            </MudText>
-            <MudText Typo="Typo.h6" Class="mt-4 mb-2 d-none d-md-block">
-                <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Small" Class="mr-1" />
-                On the shelf
-            </MudText>
-
-            @* Mobile *@
-            <div class="d-block d-md-none">
-                @foreach (var item in ToBuyManual)
-                {
-                    <MudPaper Class="pa-2 mb-1" Elevation="0" Outlined="true" @key="item.Id">
-                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                            <MudCheckBox T="bool"
-                                         Value="item.IsInCart"
-                                         ValueChanged="@(_ => ToggleManualCartAsync(item.Id))"
-                                         Color="Color.Primary"
-                                         Dense="true" />
-                            <MudStack Spacing="0" Style="flex: 1; min-width: 0;">
-                                <MudText Typo="Typo.body2" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                    @item.Name
-                                </MudText>
-                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
-                                    @if (item.Quantity.HasValue)
-                                    {
-                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                            @item.Quantity.Value.ToString("0.#")@(item.Unit.HasValue ? $" {UnitLabel(item.Unit.Value)}" : "")
-                                        </MudText>
-                                    }
-                                    @if (item.EstimatedCost > 0)
-                                    {
-                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                            · @item.EstimatedCost.ToString("C", Culture)@(item.IsCostEstimated ? "*" : "")
-                                        </MudText>
-                                    }
-                                    else if (item.IsCostEstimated)
-                                    {
-                                        <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" Color="Color.Warning" />
-                                    }
-                                </MudStack>
-                            </MudStack>
-                            @if (item.IngredientId.HasValue)
-                            {
-                                <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
-                                               Size="Size.Small"
-                                               OnClick="@(() => ShowPricesAsync(item.IngredientId.Value, item.Name))" />
-                                <MudIconButton Icon="@Icons.Material.Filled.AddCard"
-                                               Size="Size.Small"
-                                               OnClick="@(() => RecordPriceForIngredientAsync(item.IngredientId.Value, item.Name))" />
-                            }
-                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                                           Size="Size.Small"
-                                           OnClick="@(() => EditManualItemAsync(item))" />
-                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                           Size="Size.Small"
-                                           OnClick="@(() => DeleteManualItemAsync(item.Id))" />
-                        </MudStack>
-                    </MudPaper>
-                }
-            </div>
-
-            @* Desktop *@
-            <div class="d-none d-md-block">
-                <MudSimpleTable Hover="true" Dense="true" Elevation="1">
+            @if (ToBuyManual.Count > 0)
+            {
+                <MudSimpleTable Hover="true" Dense="true" Elevation="1" Class="mt-3">
                     <thead>
                         <tr>
                             <th style="width: 48px;"></th>
@@ -339,8 +332,8 @@ else if (_list is not null)
                         }
                     </tbody>
                 </MudSimpleTable>
-            </div>
-        }
+            }
+        </div>
     }
 
     @* In the Cart section *@
