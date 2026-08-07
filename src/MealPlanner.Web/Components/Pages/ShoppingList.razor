@@ -166,6 +166,15 @@ else if (_list is not null)
                                            Size="Size.Small"
                                            OnClick="@(() => RecordPriceForIngredientAsync(item.IngredientId.Value, item.Name))" />
                         }
+                        else
+                        {
+                            <MudTooltip Text="Create as ingredient to track prices">
+                                <MudIconButton Icon="@Icons.Material.Filled.SetMeal"
+                                               Size="Size.Small"
+                                               Color="Color.Info"
+                                               OnClick="@(() => CreateIngredientFromManualItemAsync(item))" />
+                            </MudTooltip>
+                        }
                         <MudIconButton Icon="@Icons.Material.Filled.Edit"
                                        Size="Size.Small"
                                        OnClick="@(() => EditManualItemAsync(item))" />
@@ -318,6 +327,15 @@ else if (_list is not null)
                                         <MudIconButton Icon="@Icons.Material.Filled.AddCard"
                                                        Size="Size.Small"
                                                        OnClick="@(() => RecordPriceForIngredientAsync(item.IngredientId.Value, item.Name))" />
+                                    }
+                                    else
+                                    {
+                                        <MudTooltip Text="Create as ingredient to track prices">
+                                            <MudIconButton Icon="@Icons.Material.Filled.SetMeal"
+                                                           Size="Size.Small"
+                                                           Color="Color.Info"
+                                                           OnClick="@(() => CreateIngredientFromManualItemAsync(item))" />
+                                        </MudTooltip>
                                     }
                                 </td>
                                 <td>
@@ -595,6 +613,45 @@ else if (_list is not null)
         catch (HttpRequestException)
         {
             Snackbar.Add("Could not update the item.", Severity.Error);
+        }
+    }
+
+    private async Task CreateIngredientFromManualItemAsync(ManualShoppingItemDto item)
+    {
+        var parameters = new DialogParameters<IngredientDialog>
+        {
+            { x => x.DefaultName, item.Name },
+        };
+        var options = DialogHelper.FormDialog();
+        var dialog = await DialogService.ShowAsync<IngredientDialog>("Create ingredient", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not SaveIngredientRequest request)
+        {
+            return;
+        }
+
+        try
+        {
+            var ingredient = await Api.CreateIngredientAsync(request);
+            if (ingredient is null)
+            {
+                Snackbar.Add("Could not create the ingredient.", Severity.Error);
+                return;
+            }
+
+            var updateRequest = new AddManualShoppingItemRequest(
+                item.Name,
+                ingredient.Id,
+                item.Quantity,
+                item.Unit);
+            await Api.UpdateManualShoppingItemAsync(_year, _month, item.Id, updateRequest);
+            Snackbar.Add($"Created ingredient \"{ingredient.Name}\" and linked it.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not create the ingredient.", Severity.Error);
         }
     }
 

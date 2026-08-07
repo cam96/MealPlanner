@@ -118,6 +118,13 @@
     [Parameter]
     public FoodCategory DefaultCategory { get; set; } = FoodCategory.None;
 
+    /// <summary>
+    /// The name to pre-fill when creating a new ingredient. Ignored when editing an existing
+    /// ingredient.
+    /// </summary>
+    [Parameter]
+    public string? DefaultName { get; set; }
+
     private string UnitLabel => _model.BaseUnit switch
     {
         MeasurementUnit.Millilitre => "ml",
@@ -155,6 +162,10 @@
         else
         {
             _model.Category = DefaultCategory;
+            if (!string.IsNullOrWhiteSpace(DefaultName))
+            {
+                _model.Name = DefaultName;
+            }
         }
     }
 
