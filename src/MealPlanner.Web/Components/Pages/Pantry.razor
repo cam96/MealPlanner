@@ -112,7 +112,7 @@
             { x => x.Ingredients, _ingredients },
         };
         var title = existing is null ? "Add pantry item" : "Edit pantry item";
-        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true };
+        var options = DialogHelper.FormDialog();
         var dialog = await DialogService.ShowAsync<PantryItemDialog>(title, parameters, options);
         var result = await dialog.Result;
 

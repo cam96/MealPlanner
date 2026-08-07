@@ -662,12 +662,7 @@ else if (_list is not null)
             { x => x.IngredientName, ingredientName },
             { x => x.Prices, prices },
         };
-        var options = new DialogOptions
-        {
-            MaxWidth = MaxWidth.Small,
-            FullWidth = true,
-            CloseOnEscapeKey = true,
-        };
+        var options = DialogHelper.ViewDialog();
         await DialogService.ShowAsync<PriceListDialog>($"Prices — {ingredientName}", parameters, options);
     }
 

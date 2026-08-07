@@ -87,8 +87,23 @@ h1:focus {
     flex-wrap: wrap;
 }
 
+/* On mobile, promote every MudBlazor dialog to full-screen so form controls
+   remain comfortable for touch input. Desktop dialogs stay constrained to their
+   MaxWidth (set via DialogHelper). */
 @media (max-width: 599.98px) {
-    .mud-dialog-fullscreen .mud-dialog-content {
+    .mud-dialog {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+    }
+
+    .mud-dialog .mud-dialog-content {
         padding: 12px;
     }
 
