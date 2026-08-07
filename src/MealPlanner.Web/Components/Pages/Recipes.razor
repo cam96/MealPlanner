@@ -6,15 +6,7 @@
 
 <PageTitle>Recipes - MealPlanner</PageTitle>
 
-<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
-    <MudText Typo="Typo.h4">Recipes</MudText>
-    <MudButton Variant="Variant.Filled"
-               Color="Color.Primary"
-               StartIcon="@Icons.Material.Filled.Add"
-               OnClick="@(() => Navigation.NavigateTo("/recipes/new"))">
-        Add recipe
-    </MudButton>
-</MudStack>
+<MudText Typo="Typo.h5" Class="mb-2 d-none d-sm-block">Recipes</MudText>
 
 <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
     Nutrition and cost are calculated per serving from ingredient prices. Estimated figures are flagged.
@@ -94,6 +86,12 @@
         }
     </NoRecordsContent>
 </MudDataGrid>
+
+@* FAB — always reachable for adding *@
+<MudFab StartIcon="@Icons.Material.Filled.Add"
+        Color="Color.Primary"
+        Class="fab-bottom-right"
+        OnClick="@(() => Navigation.NavigateTo("/recipes/new"))" />
 
 @code {
     private IReadOnlyList<RecipeSummaryDto> _recipes = [];
