@@ -1,16 +1,23 @@
 @page "/shopping-list"
 @using System.Globalization
-@using MealPlanner.Contracts
-@using MealPlanner.Contracts.Ingredients
-@using MealPlanner.Contracts.Shopping
+@using MealPlanner.Web.Components.Dialogs
 @inject MealPlannerApiClient Api
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <PageTitle>Shopping list - MealPlanner</PageTitle>
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
     <MudText Typo="Typo.h4">Shopping list</MudText>
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.AttachMoney"
+                   OnClick="RecordPriceWithPickerAsync"
+                   Size="Size.Small"
+                   Class="mr-2">
+            Record price
+        </MudButton>
         <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" OnClick="PreviousMonthAsync" />
         <MudText Typo="Typo.h6" Style="min-width: 180px; text-align: center;">@MonthLabel</MudText>
         <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" OnClick="NextMonthAsync" />
@@ -176,6 +183,11 @@ else if (_list is not null)
                                         <MudChip T="string" Size="Size.Small" Class="ma-1">Shared</MudChip>
                                     </MudTooltip>
                                 }
+                                <MudTooltip Text="Record a price for this ingredient">
+                                    <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => RecordPriceForIngredientAsync(line.IngredientId, line.IngredientName))" />
+                                </MudTooltip>
                             </td>
                         </tr>
                     }
@@ -258,6 +270,14 @@ else if (_list is not null)
                                 }
                             </td>
                             <td>
+                                @if (item.IngredientId.HasValue)
+                                {
+                                    <MudTooltip Text="Record a price for this ingredient">
+                                        <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => RecordPriceForIngredientAsync(item.IngredientId.Value, item.Name))" />
+                                    </MudTooltip>
+                                }
                                 <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                                Size="Size.Small"
                                                OnClick="@(() => DeleteManualItemAsync(item.Id))" />
@@ -344,6 +364,7 @@ else if (_list is not null)
     private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("en-CA");
 
     private ShoppingListDto? _list;
+    private IReadOnlyList<StoreDto> _stores = [];
     private bool _loading = true;
     private int _year = DateTime.Today.Year;
     private int _month = DateTime.Today.Month;
@@ -377,7 +398,11 @@ else if (_list is not null)
 
     private bool HasCartItems => InCartLines.Count > 0 || InCartManual.Count > 0;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        _stores = await Api.GetStoresAsync();
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
@@ -523,6 +548,77 @@ else if (_list is not null)
         catch (HttpRequestException)
         {
             Snackbar.Add("Could not clear the cart.", Severity.Error);
+        }
+    }
+
+    private async Task RecordPriceForIngredientAsync(int ingredientId, string ingredientName)
+    {
+        if (_stores.Count == 0)
+        {
+            Snackbar.Add("Add a store under Settings before recording prices.", Severity.Info);
+            return;
+        }
+
+        var parameters = new DialogParameters<PriceDialog>
+        {
+            { x => x.Existing, null },
+            { x => x.Stores, _stores },
+            { x => x.ShowIngredientPicker, false },
+            { x => x.IngredientId, ingredientId },
+        };
+        var options = DialogHelper.FormDialog();
+        var dialog = await DialogService.ShowAsync<PriceDialog>($"Record price — {ingredientName}", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not SaveIngredientPriceRequest request)
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.CreatePriceAsync(ingredientId, request);
+            Snackbar.Add("Price recorded.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not save the price.", Severity.Error);
+        }
+    }
+
+    private async Task RecordPriceWithPickerAsync()
+    {
+        if (_stores.Count == 0)
+        {
+            Snackbar.Add("Add a store under Settings before recording prices.", Severity.Info);
+            return;
+        }
+
+        var parameters = new DialogParameters<PriceDialog>
+        {
+            { x => x.Existing, null },
+            { x => x.Stores, _stores },
+            { x => x.ShowIngredientPicker, true },
+        };
+        var options = DialogHelper.FormDialog();
+        var dialog = await DialogService.ShowAsync<PriceDialog>("Record price", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not PriceDialogResult dialogResult)
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.CreatePriceAsync(dialogResult.IngredientId, dialogResult.Request);
+            Snackbar.Add("Price recorded.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not save the price.", Severity.Error);
         }
     }
 
