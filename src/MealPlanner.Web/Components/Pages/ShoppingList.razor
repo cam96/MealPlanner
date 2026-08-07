@@ -183,8 +183,13 @@ else if (_list is not null)
                                         <MudChip T="string" Size="Size.Small" Class="ma-1">Shared</MudChip>
                                     </MudTooltip>
                                 }
-                                <MudTooltip Text="Record a price for this ingredient">
+                                <MudTooltip Text="View prices">
                                     <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => ShowPricesAsync(line.IngredientId, line.IngredientName))" />
+                                </MudTooltip>
+                                <MudTooltip Text="Record a new price">
+                                    <MudIconButton Icon="@Icons.Material.Filled.AddCard"
                                                    Size="Size.Small"
                                                    OnClick="@(() => RecordPriceForIngredientAsync(line.IngredientId, line.IngredientName))" />
                                 </MudTooltip>
@@ -204,8 +209,7 @@ else if (_list is not null)
                         <th style="width: 48px;"></th>
                         <th>Item</th>
                         <th style="text-align:right;">Quantity</th>
-                        <th style="text-align:right;">Price</th>
-                        <th style="width: 48px;"></th>
+                        <th style="width: 100px;"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -220,10 +224,12 @@ else if (_list is not null)
                             </td>
                             <td>
                                 @item.Name
-                                @if (item.IngredientId.HasValue)
+                                @if (!item.IngredientId.HasValue)
                                 {
-                                    <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small"
-                                             Class="ml-1 mud-text-secondary" />
+                                    <MudTooltip Text="Manually entered (not linked to an ingredient)">
+                                        <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                                 Class="ml-1 mud-text-secondary" />
+                                    </MudTooltip>
                                 }
                             </td>
                             <td style="text-align:right;">
@@ -240,43 +246,15 @@ else if (_list is not null)
                                     <text>-</text>
                                 }
                             </td>
-                            <td style="text-align:right;">
-                                @if (item.Prices.Count > 0)
-                                {
-                                    var preferred = item.Prices.FirstOrDefault(p => p.IsPreferredStore)
-                                                   ?? item.Prices[0];
-                                    <MudTooltip>
-                                        <ChildContent>
-                                            <span>@preferred.Price.ToString("C", Culture)</span>
-                                        </ChildContent>
-                                        <TooltipContent>
-                                            <MudStack Spacing="1">
-                                                @foreach (var price in item.Prices.Take(5))
-                                                {
-                                                    <MudText Typo="Typo.caption">
-                                                        @price.StoreName: @price.Price.ToString("C", Culture)
-                                                        (@price.PackageQuantity.ToString("0.#") @UnitLabel(price.PackageUnit))
-                                                        — @price.RecordedDate.ToString("MMM d, yyyy")
-                                                        @(price.IsPreferredStore ? " ★" : "")
-                                                    </MudText>
-                                                }
-                                            </MudStack>
-                                        </TooltipContent>
-                                    </MudTooltip>
-                                }
-                                else
-                                {
-                                    <text>-</text>
-                                }
-                            </td>
                             <td>
                                 @if (item.IngredientId.HasValue)
                                 {
-                                    <MudTooltip Text="Record a price for this ingredient">
-                                        <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
-                                                       Size="Size.Small"
-                                                       OnClick="@(() => RecordPriceForIngredientAsync(item.IngredientId.Value, item.Name))" />
-                                    </MudTooltip>
+                                    <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => ShowPricesAsync(item.IngredientId.Value, item.Name))" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.AddCard"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => RecordPriceForIngredientAsync(item.IngredientId.Value, item.Name))" />
                                 }
                                 <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                                Size="Size.Small"
@@ -549,6 +527,39 @@ else if (_list is not null)
         {
             Snackbar.Add("Could not clear the cart.", Severity.Error);
         }
+    }
+
+    private async Task ShowPricesAsync(int ingredientId, string ingredientName)
+    {
+        IReadOnlyList<IngredientPriceDto> prices;
+        try
+        {
+            prices = await Api.GetPricesAsync(ingredientId);
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not load prices.", Severity.Error);
+            return;
+        }
+
+        if (prices.Count == 0)
+        {
+            Snackbar.Add($"No prices recorded for {ingredientName}.", Severity.Info);
+            return;
+        }
+
+        var parameters = new DialogParameters<PriceListDialog>
+        {
+            { x => x.IngredientName, ingredientName },
+            { x => x.Prices, prices },
+        };
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseOnEscapeKey = true,
+        };
+        await DialogService.ShowAsync<PriceListDialog>($"Prices — {ingredientName}", parameters, options);
     }
 
     private async Task RecordPriceForIngredientAsync(int ingredientId, string ingredientName)

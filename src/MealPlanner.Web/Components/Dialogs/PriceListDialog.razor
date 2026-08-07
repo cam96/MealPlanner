@@ -1,0 +1,76 @@
+@using System.Globalization
+@using MealPlanner.Contracts.Prices
+
+<MudDialog>
+    <DialogContent>
+        @if (Prices.Count == 0)
+        {
+            <MudText Class="pa-4 mud-text-secondary">No prices recorded for @IngredientName.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Hover="true" Dense="true">
+                <thead>
+                    <tr>
+                        <th>Store</th>
+                        <th style="text-align:right;">Price</th>
+                        <th>Package</th>
+                        <th>Date</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var price in Prices)
+                    {
+                        <tr>
+                            <td>@price.StoreName</td>
+                            <td style="text-align:right;">
+                                @price.Price.ToString("C", Culture)
+                                @if (price.IsEstimated)
+                                {
+                                    <text>*</text>
+                                }
+                            </td>
+                            <td>@price.PackageQuantity.ToString("0.#") @UnitLabel(price.PackageUnit)</td>
+                            <td>@price.RecordedDate.ToString("MMM d, yyyy")</td>
+                            <td>
+                                @if (price.IsPreferredStore)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Primary" Size="Size.Small" />
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("en-CA");
+
+    /// <summary>The dialog instance used to close the dialog.</summary>
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The ingredient name for display.</summary>
+    [Parameter]
+    public string IngredientName { get; set; } = string.Empty;
+
+    /// <summary>The price observations to display.</summary>
+    [Parameter]
+    public IReadOnlyList<IngredientPriceDto> Prices { get; set; } = [];
+
+    private void Close() => MudDialog.Close();
+
+    private static string UnitLabel(MeasurementUnit unit) => unit switch
+    {
+        MeasurementUnit.Millilitre => "ml",
+        MeasurementUnit.Each => "each",
+        _ => "g",
+    };
+}
