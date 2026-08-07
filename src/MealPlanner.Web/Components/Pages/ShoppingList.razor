@@ -184,8 +184,14 @@ else if (_list is not null)
         @* Manual items *@
         @if (ToBuyManual.Count > 0)
         {
-            <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1 d-block d-md-none mud-text-secondary">On the shelf</MudText>
-            <MudText Typo="Typo.h6" Class="mt-4 mb-2 d-none d-md-block">On the shelf</MudText>
+            <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1 d-block d-md-none mud-text-secondary">
+                <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Small" Class="mr-1" />
+                On the shelf
+            </MudText>
+            <MudText Typo="Typo.h6" Class="mt-4 mb-2 d-none d-md-block">
+                <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Small" Class="mr-1" />
+                On the shelf
+            </MudText>
 
             @* Mobile *@
             <div class="d-block d-md-none">
