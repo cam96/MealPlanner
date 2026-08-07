@@ -153,6 +153,11 @@ else if (_plan is not null)
         opacity: 0.7;
     }
 
+    .planner-cell-today {
+        border-left: 3px solid var(--mud-palette-primary);
+        background-color: color-mix(in srgb, var(--mud-palette-primary) 6%, transparent);
+    }
+
     .planner-cell-head {
         display: flex;
         align-items: center;
@@ -387,8 +392,21 @@ else if (_plan is not null)
         }
     }
 
-    private static string CellClass(DayPlanDto day) =>
-        day.DayType == DayType.Normal ? "planner-cell" : "planner-cell planner-cell-nonnormal";
+    private static string CellClass(DayPlanDto day)
+    {
+        var css = "planner-cell";
+        if (day.DayType != DayType.Normal)
+        {
+            css += " planner-cell-nonnormal";
+        }
+
+        if (day.Date == DateOnly.FromDateTime(DateTime.Today))
+        {
+            css += " planner-cell-today";
+        }
+
+        return css;
+    }
 
     private static string GoalClass(double actual, int goal) =>
         goal > 0 && actual >= goal ? "planner-goal-met" : "planner-goal-under";
