@@ -389,4 +389,103 @@ public class ShoppingListGeneratorTests
 
         Assert.That(list.Lines, Is.Empty);
     }
+
+    [Test]
+    public void Generate_FourServingsOfTwoServingRecipe_DoublesIngredients()
+    {
+        var flour = Flour();
+        // 4 servings of a 2-serving recipe = 2x the ingredient quantities
+        var plan = PlanWith(Bread(flour), servings: 4);
+
+        var list = ShoppingListGenerator.Generate(plan, [], [Price(1, 4m, 1000)]);
+
+        Assert.That(list.Lines, Has.Count.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            // Recipe has 500g flour for 2 servings; 4 servings = 2 × 500g = 1000g
+            Assert.That(list.Lines[0].RequiredQuantity, Is.EqualTo(1000).Within(0.001));
+            Assert.That(list.Lines[0].PackagesToBuy, Is.EqualTo(1));
+            Assert.That(list.Lines[0].EstimatedCost, Is.EqualTo(4m));
+        });
+    }
+
+    [Test]
+    public void Generate_PantryItemWithIncompatibleUnit_IgnoredInSubtraction()
+    {
+        var flour = Flour(); // Gram-based
+        var plan = PlanWith(Bread(flour), servings: 2); // needs 500 g
+        var pantry = new List<PantryItem>
+        {
+            // Millilitre can't be converted to grams without density
+            new() { IngredientId = 1, Ingredient = flour, QuantityOnHand = 5000, Unit = MeasurementUnit.Millilitre, Location = StorageLocation.Pantry },
+        };
+
+        var list = ShoppingListGenerator.Generate(plan, pantry, [Price(1, 4m, 1000)]);
+
+        Assert.That(list.Lines, Has.Count.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            // Pantry couldn't be converted, so full 500g still needed
+            Assert.That(list.Lines[0].PantryQuantity, Is.EqualTo(0).Within(0.001));
+            Assert.That(list.Lines[0].ToBuyQuantity, Is.EqualTo(500).Within(0.001));
+        });
+    }
+
+    [Test]
+    public void Generate_EmptyPlan_ReturnsEmptyList()
+    {
+        var plan = new MealPlan { Year = 2026, Month = 1 };
+
+        var list = ShoppingListGenerator.Generate(plan, [], [Price(1, 4m, 1000)]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(list.Lines, Is.Empty);
+            Assert.That(list.EstimatedTotal, Is.EqualTo(0m));
+            Assert.That(list.IsEstimated, Is.False);
+        });
+    }
+
+    [Test]
+    public void Generate_MultiplePantryLocations_SummedForSubtraction()
+    {
+        var flour = Flour();
+        var plan = PlanWith(Bread(flour), servings: 2); // needs 500 g
+        var pantry = new List<PantryItem>
+        {
+            new() { IngredientId = 1, Ingredient = flour, QuantityOnHand = 200, Unit = MeasurementUnit.Gram, Location = StorageLocation.Pantry },
+            new() { IngredientId = 1, Ingredient = flour, QuantityOnHand = 100, Unit = MeasurementUnit.Gram, Location = StorageLocation.Freezer },
+        };
+
+        var list = ShoppingListGenerator.Generate(plan, pantry, [Price(1, 4m, 1000)]);
+
+        Assert.That(list.Lines, Has.Count.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(list.Lines[0].PantryQuantity, Is.EqualTo(300).Within(0.001));
+            Assert.That(list.Lines[0].ToBuyQuantity, Is.EqualTo(200).Within(0.001));
+        });
+    }
+
+    [Test]
+    public void Generate_DealDetection_FlagsLineAsDeal()
+    {
+        var flour = Flour();
+        var plan = PlanWith(Bread(flour), servings: 2); // needs 500g
+        var prices = new List<IngredientPrice>
+        {
+            Price(1, 5m, 1000, preferred: true, date: new DateOnly(2026, 1, 1)),
+            Price(1, 5m, 1000, preferred: true, date: new DateOnly(2026, 1, 8)),
+            Price(1, 3m, 1000, preferred: true, date: new DateOnly(2026, 1, 15)), // 40% below avg, is a deal
+        };
+
+        var list = ShoppingListGenerator.Generate(plan, [], prices);
+
+        Assert.That(list.Lines, Has.Count.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(list.Lines[0].IsDeal, Is.True);
+            Assert.That(list.Lines[0].PercentBelowAverage, Is.EqualTo(40).Within(0.1));
+        });
+    }
 }

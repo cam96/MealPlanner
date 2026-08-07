@@ -100,4 +100,80 @@ public class DealDetectorTests
             Assert.Throws<ArgumentNullException>(() => DealDetector.Evaluate(Flour(), null!));
         });
     }
+
+    [Test]
+    public void Evaluate_CustomThreshold_UsesProvidedValue()
+    {
+        // 8% below average is a deal with 5% threshold but not with 10%
+        var prices = new List<IngredientPrice>
+        {
+            Price(5m, 1000, new DateOnly(2026, 1, 1)),  // $0.005/g
+            Price(5m, 1000, new DateOnly(2026, 1, 8)),  // $0.005/g
+            Price(4.6m, 1000, new DateOnly(2026, 1, 15)), // $0.0046/g (8% below)
+        };
+
+        var resultStrict = DealDetector.Evaluate(Flour(), prices, thresholdPercent: 10.0);
+        var resultLoose = DealDetector.Evaluate(Flour(), prices, thresholdPercent: 5.0);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(resultStrict!.IsDeal, Is.False);
+            Assert.That(resultLoose!.IsDeal, Is.True);
+        });
+    }
+
+    [Test]
+    public void Evaluate_PricesForDifferentIngredients_AreFiltered()
+    {
+        var flour = Flour();
+        var prices = new List<IngredientPrice>
+        {
+            Price(5m, 1000, new DateOnly(2026, 1, 1)),  // flour price
+            new() { IngredientId = 999, Price = 100m, PackageQuantity = 100, PackageUnit = MeasurementUnit.Gram, RecordedDate = new DateOnly(2026, 1, 2) },
+            Price(3m, 1000, new DateOnly(2026, 1, 15)), // flour price (latest)
+        };
+
+        var result = DealDetector.Evaluate(flour, prices);
+
+        // Only flour prices (IngredientId=1) are considered.
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.IsDeal, Is.True);
+    }
+
+    [Test]
+    public void Evaluate_LatestAboveAverage_IsNotDealWithNegativePercent()
+    {
+        var prices = new List<IngredientPrice>
+        {
+            Price(3m, 1000, new DateOnly(2026, 1, 1)),
+            Price(3m, 1000, new DateOnly(2026, 1, 8)),
+            Price(5m, 1000, new DateOnly(2026, 1, 15)), // above average
+        };
+
+        var result = DealDetector.Evaluate(Flour(), prices);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result!.IsDeal, Is.False);
+            Assert.That(result.PercentBelowAverage, Is.LessThan(0));
+        });
+    }
+
+    [Test]
+    public void Evaluate_IncompatiblePackageUnit_SkipsPrice()
+    {
+        var flour = Flour(); // Gram-based
+        var prices = new List<IngredientPrice>
+        {
+            // Millilitre package can't be normalised for a gram-based ingredient
+            new() { IngredientId = 1, Price = 5m, PackageQuantity = 500, PackageUnit = MeasurementUnit.Millilitre, RecordedDate = new DateOnly(2026, 1, 1) },
+            Price(5m, 1000, new DateOnly(2026, 1, 8)),
+        };
+
+        // Only one price can be normalised, so fewer than 2 => null
+        var result = DealDetector.Evaluate(flour, prices);
+
+        Assert.That(result, Is.Null);
+    }
 }

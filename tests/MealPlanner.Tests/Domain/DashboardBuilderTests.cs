@@ -160,4 +160,144 @@ public class DashboardBuilderTests
     public void Build_NullPeople_Throws() =>
         Assert.Throws<ArgumentNullException>(() =>
             DashboardBuilder.Build(new MealPlan { Year = 2026, Month = 3 }, null!, 0m, 0m, false));
+
+    [Test]
+    public void Build_OverCalorieGoal_RaisesWarningAlert()
+    {
+        // Create a plan with very high calories: 2 servings of a 5000-calorie recipe shared.
+        var highCalRecipe = new Recipe
+        {
+            Id = 2,
+            Name = "Ultra bread",
+            Servings = 1,
+            PrepMinutes = 0,
+            CookMinutes = 0,
+            Ingredients =
+            {
+                new RecipeIngredient
+                {
+                    IngredientId = 1,
+                    Ingredient = new Ingredient
+                    {
+                        Id = 1,
+                        Name = "Super flour",
+                        BaseUnit = MeasurementUnit.Gram,
+                        CaloriesPer100 = 5000,
+                        ProteinPer100 = 200,
+                    },
+                    Quantity = 100,
+                    Unit = MeasurementUnit.Gram,
+                },
+            },
+        };
+        var plan = new MealPlan { Year = 2026, Month = 3 };
+        plan.Days.Add(NormalDay(
+            new DateOnly(2026, 3, 1),
+            new PlannedMeal { Slot = MealType.Lunch, Assignee = MealAssignee.Shared, Recipe = highCalRecipe, RecipeId = 2, Servings = 1 }));
+
+        var summary = DashboardBuilder.Build(plan, TwoPeople(), 0m, 0m, false);
+
+        // Each person averages 2500 kcal/day, above 2000/2200 * 1.1 threshold
+        Assert.That(
+            summary.Alerts,
+            Has.Some.Matches<DashboardAlert>(a =>
+                a.Level == DashboardAlertLevel.Warning && a.Message.Contains("above", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public void Build_ProteinUnderGoal_RaisesInfoAlert()
+    {
+        // Bread recipe has only 10g protein per 100g flour. Shared meal gives 5g per person.
+        var recipe = Bread();
+        var plan = new MealPlan { Year = 2026, Month = 3 };
+        plan.Days.Add(NormalDay(
+            new DateOnly(2026, 3, 1),
+            new PlannedMeal { Slot = MealType.Lunch, Assignee = MealAssignee.Shared, Recipe = recipe, RecipeId = 1, Servings = 1 }));
+
+        var summary = DashboardBuilder.Build(plan, TwoPeople(), 0m, 0m, false);
+
+        // Each person averages 5g protein/day, far below 100g/110g goals
+        Assert.That(
+            summary.Alerts,
+            Has.Some.Matches<DashboardAlert>(a =>
+                a.Level == DashboardAlertLevel.Info && a.Message.Contains("protein", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public void Build_ZeroCountedDays_AllEatingOut_NoNutritionAlerts()
+    {
+        var plan = new MealPlan { Year = 2026, Month = 3 };
+        plan.Days.Add(new DayPlan
+        {
+            Date = new DateOnly(2026, 3, 1),
+            DayType = DayType.EatingOut,
+            Meals =
+            {
+                new PlannedMeal { Slot = MealType.Dinner, Assignee = MealAssignee.Shared, Recipe = Bread(), RecipeId = 1, Servings = 1 },
+            },
+        });
+
+        var summary = DashboardBuilder.Build(plan, TwoPeople(), 100m, 50m, false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(summary.CountedDays, Is.EqualTo(0));
+            // No nutrition alerts when zero counted days
+            Assert.That(
+                summary.Alerts,
+                Has.None.Matches<DashboardAlert>(a =>
+                    a.Message.Contains("kcal", StringComparison.Ordinal)));
+        });
+    }
+
+    [Test]
+    public void Build_NoBudget_NotOverBudgetEvenWithProjectedSpend()
+    {
+        var plan = new MealPlan { Year = 2026, Month = 3 };
+        plan.Days.Add(NormalDay(new DateOnly(2026, 3, 1)));
+
+        var summary = DashboardBuilder.Build(plan, TwoPeople(), 0m, 500m, false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(summary.IsOverBudget, Is.False);
+            Assert.That(
+                summary.Alerts,
+                Has.None.Matches<DashboardAlert>(a =>
+                    a.Message.Contains("exceeds", StringComparison.Ordinal)));
+        });
+    }
+
+    [Test]
+    public void Build_SpendIsEstimated_FlagIsPropagated()
+    {
+        var plan = new MealPlan { Year = 2026, Month = 3 };
+        plan.Days.Add(NormalDay(new DateOnly(2026, 3, 1)));
+
+        var summary = DashboardBuilder.Build(plan, TwoPeople(), 100m, 50m, spendIsEstimated: true);
+
+        Assert.That(summary.SpendIsEstimated, Is.True);
+    }
+
+    [Test]
+    public void Build_PlannedMealCount_OnlyCountsRecipesOnNormalDays()
+    {
+        var recipe = Bread();
+        var plan = new MealPlan { Year = 2026, Month = 3 };
+        plan.Days.Add(NormalDay(
+            new DateOnly(2026, 3, 1),
+            new PlannedMeal { Slot = MealType.Lunch, Assignee = MealAssignee.Shared, Recipe = recipe, RecipeId = 1, Servings = 1 },
+            new PlannedMeal { Slot = MealType.Dinner, Assignee = MealAssignee.Shared, Recipe = null, MealCombo = new MealCombo { Name = "Combo" }, MealComboId = 1, Servings = 1 }));
+        plan.Days.Add(new DayPlan
+        {
+            Date = new DateOnly(2026, 3, 2),
+            DayType = DayType.EatingOut,
+            Meals = { new PlannedMeal { Slot = MealType.Dinner, Assignee = MealAssignee.Shared, Recipe = recipe, RecipeId = 1, Servings = 1 } },
+        });
+
+        var summary = DashboardBuilder.Build(plan, TwoPeople(), 0m, 0m, false);
+
+        // Only the one recipe on the normal day counts; combo and eating-out recipe don't count
+        Assert.That(summary.PlannedMealCount, Is.EqualTo(1));
+    }
 }
