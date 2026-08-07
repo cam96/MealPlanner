@@ -78,7 +78,12 @@
 
             if (item.IngredientId.HasValue)
             {
-                _model.Ingredient = new IngredientDto(item.IngredientId.Value, item.Name, null);
+                _model.Ingredient = new IngredientDto(
+                    item.IngredientId.Value,
+                    item.Name,
+                    MeasurementUnit.Gram,
+                    FoodCategory.None,
+                    0, 0, 0, 0, 0, false, null, null);
             }
         }
     }
