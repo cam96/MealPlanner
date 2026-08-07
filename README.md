@@ -288,8 +288,9 @@ git pull                          # or re-copy the repo
 docker compose up -d --build
 ```
 
-To enable **CNF nutrition search** on the server, bind-mount your `data/cnf` folder into the API
-container (see [Nutrition data](#nutrition-data-canadian-nutrient-file) below).
+The `docker-compose.yml` bind-mounts `./data/cnf` into the API container automatically. If the
+folder is absent (CNF not yet downloaded), Docker skips the mount and CNF search is simply hidden
+in the UI.
 
 > `aspire publish` can also generate an equivalent Compose project; the checked-in
 > [docker-compose.yml](docker-compose.yml) is the maintained home-deploy artifact.
@@ -336,8 +337,9 @@ API (never committed to source control).
 
 The API reads the dataset lazily and caches it in memory; when the files are absent the CNF search
 is simply hidden. The directory is configured by `MealPlanner:CnfDirectory` (defaults to `data/cnf`;
-the development profile points at the repo-root copy). In Docker, bind-mount your `data/cnf` folder
-into the API container to enable CNF search there.
+the development profile points at the repo-root copy). The `docker-compose.yml` bind-mounts
+`./data/cnf` into the container automatically — just drop the CSVs into `data/cnf/` before running
+`docker compose up`.
 
 Attribution shown in the UI: **"Canadian Nutrient File, Health Canada, 2015"**.
 
