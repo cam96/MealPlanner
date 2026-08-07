@@ -14,7 +14,10 @@
                        Label="Base unit"
                        Class="mt-3">
                 <MudSelectItem Value="MeasurementUnit.Gram">Grams (g)</MudSelectItem>
+                <MudSelectItem Value="MeasurementUnit.Kilogram">Kilograms (kg)</MudSelectItem>
+                <MudSelectItem Value="MeasurementUnit.Pound">Pounds (lbs)</MudSelectItem>
                 <MudSelectItem Value="MeasurementUnit.Millilitre">Millilitres (ml)</MudSelectItem>
+                <MudSelectItem Value="MeasurementUnit.Litre">Litres (L)</MudSelectItem>
                 <MudSelectItem Value="MeasurementUnit.Each">Each (count)</MudSelectItem>
             </MudSelect>
 
@@ -118,6 +121,9 @@
     private string UnitLabel => _model.BaseUnit switch
     {
         MeasurementUnit.Millilitre => "ml",
+        MeasurementUnit.Litre => "L",
+        MeasurementUnit.Kilogram => "kg",
+        MeasurementUnit.Pound => "lbs",
         MeasurementUnit.Each => "items",
         _ => "g",
     };

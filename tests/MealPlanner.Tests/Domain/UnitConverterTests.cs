@@ -221,4 +221,230 @@ public class UnitConverterTests
             Assert.That(result, Is.EqualTo(500).Within(0.001));
         });
     }
+
+    // -- Kilogram conversions ------------------------------------------------------------------
+
+    [Test]
+    public void TryToBaseUnits_KilogramToGram_Converts()
+    {
+        // 2.5 kg → 2500 g
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Gram, servingWeightG: null, quantity: 2.5, MeasurementUnit.Kilogram, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.True);
+            Assert.That(result, Is.EqualTo(2500.0).Within(0.001));
+        });
+    }
+
+    [Test]
+    public void TryToBaseUnits_GramToKilogram_Converts()
+    {
+        // 500 g → 0.5 kg
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Kilogram, servingWeightG: null, quantity: 500, MeasurementUnit.Gram, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.True);
+            Assert.That(result, Is.EqualTo(0.5).Within(0.001));
+        });
+    }
+
+    [Test]
+    public void TryToBaseUnits_KilogramToKilogram_Passthrough()
+    {
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Kilogram, servingWeightG: null, quantity: 3.0, MeasurementUnit.Kilogram, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.True);
+            Assert.That(result, Is.EqualTo(3.0).Within(0.001));
+        });
+    }
+
+    // -- Pound conversions ---------------------------------------------------------------------
+
+    [Test]
+    public void TryToBaseUnits_PoundToGram_Converts()
+    {
+        // 1 lb → 453.592 g
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Gram, servingWeightG: null, quantity: 1.0, MeasurementUnit.Pound, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.True);
+            Assert.That(result, Is.EqualTo(453.592).Within(0.001));
+        });
+    }
+
+    [Test]
+    public void TryToBaseUnits_GramToPound_Converts()
+    {
+        // 453.592 g → 1 lb
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Pound, servingWeightG: null, quantity: 453.592, MeasurementUnit.Gram, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.True);
+            Assert.That(result, Is.EqualTo(1.0).Within(0.001));
+        });
+    }
+
+    [Test]
+    public void TryToBaseUnits_PoundToKilogram_Converts()
+    {
+        // 2.2 lbs → ~0.998 kg (cross-conversion via grams)
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Kilogram, servingWeightG: null, quantity: 2.2, MeasurementUnit.Pound, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.True);
+            Assert.That(result, Is.EqualTo(2.2 * 453.592 / 1000.0).Within(0.001));
+        });
+    }
+
+    [Test]
+    public void TryToBaseUnits_KilogramToPound_Converts()
+    {
+        // 1 kg → ~2.205 lbs
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Pound, servingWeightG: null, quantity: 1.0, MeasurementUnit.Kilogram, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.True);
+            Assert.That(result, Is.EqualTo(1000.0 / 453.592).Within(0.001));
+        });
+    }
+
+    // -- Litre conversions ---------------------------------------------------------------------
+
+    [Test]
+    public void TryToBaseUnits_LitreToMillilitre_Converts()
+    {
+        // 1.5 L → 1500 ml
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Millilitre, servingWeightG: null, quantity: 1.5, MeasurementUnit.Litre, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.True);
+            Assert.That(result, Is.EqualTo(1500.0).Within(0.001));
+        });
+    }
+
+    [Test]
+    public void TryToBaseUnits_MillilitreToLitre_Converts()
+    {
+        // 750 ml → 0.75 L
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Litre, servingWeightG: null, quantity: 750, MeasurementUnit.Millilitre, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.True);
+            Assert.That(result, Is.EqualTo(0.75).Within(0.001));
+        });
+    }
+
+    [Test]
+    public void TryToBaseUnits_LitreToLitre_Passthrough()
+    {
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Litre, servingWeightG: null, quantity: 2.0, MeasurementUnit.Litre, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.True);
+            Assert.That(result, Is.EqualTo(2.0).Within(0.001));
+        });
+    }
+
+    // -- Cross-dimension incompatibility with new units ----------------------------------------
+
+    [Test]
+    public void TryToBaseUnits_KilogramToMillilitre_ReturnsFalse()
+    {
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Millilitre, servingWeightG: null, quantity: 1.0, MeasurementUnit.Kilogram, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.False);
+            Assert.That(result, Is.EqualTo(0));
+        });
+    }
+
+    [Test]
+    public void TryToBaseUnits_LitreToGram_ReturnsFalse()
+    {
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Gram, servingWeightG: null, quantity: 1.0, MeasurementUnit.Litre, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.False);
+            Assert.That(result, Is.EqualTo(0));
+        });
+    }
+
+    [Test]
+    public void TryToBaseUnits_PoundToLitre_ReturnsFalse()
+    {
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Litre, servingWeightG: null, quantity: 2.0, MeasurementUnit.Pound, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.False);
+            Assert.That(result, Is.EqualTo(0));
+        });
+    }
+
+    [Test]
+    public void TryToBaseUnits_EachToKilogram_WithServingWeight_Converts()
+    {
+        // 3 items × 50 g = 150 g → 0.15 kg
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Kilogram, servingWeightG: 50.0, quantity: 3, MeasurementUnit.Each, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.True);
+            Assert.That(result, Is.EqualTo(0.15).Within(0.001));
+        });
+    }
+
+    [Test]
+    public void TryToBaseUnits_PoundToEach_WithServingWeight_Converts()
+    {
+        // 1 lb = 453.592 g ÷ 50 g per item = ~9.072 items
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Each, servingWeightG: 50.0, quantity: 1.0, MeasurementUnit.Pound, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.True);
+            Assert.That(result, Is.EqualTo(453.592 / 50.0).Within(0.001));
+        });
+    }
+
+    [Test]
+    public void TryToBaseUnits_EachToLitre_ReturnsFalse()
+    {
+        var success = UnitConverter.TryToBaseUnits(
+            MeasurementUnit.Litre, servingWeightG: 50.0, quantity: 2, MeasurementUnit.Each, out var result);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(success, Is.False);
+            Assert.That(result, Is.EqualTo(0));
+        });
+    }
 }

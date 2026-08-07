@@ -14,4 +14,13 @@ public enum MeasurementUnit
 
     /// <summary>A whole count of items.</summary>
     Each = 2,
+
+    /// <summary>Mass in kilograms (kg).</summary>
+    Kilogram = 3,
+
+    /// <summary>Mass in pounds (lb).</summary>
+    Pound = 4,
+
+    /// <summary>Volume in litres (L).</summary>
+    Litre = 5,
 }

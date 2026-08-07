@@ -37,6 +37,9 @@ internal static class EntityMappings
         DomainUnit.Gram => ContractUnit.Gram,
         DomainUnit.Millilitre => ContractUnit.Millilitre,
         DomainUnit.Each => ContractUnit.Each,
+        DomainUnit.Kilogram => ContractUnit.Kilogram,
+        DomainUnit.Pound => ContractUnit.Pound,
+        DomainUnit.Litre => ContractUnit.Litre,
         _ => throw new ArgumentOutOfRangeException(nameof(unit), unit, "Unknown measurement unit."),
     };
 
@@ -46,6 +49,9 @@ internal static class EntityMappings
         ContractUnit.Gram => DomainUnit.Gram,
         ContractUnit.Millilitre => DomainUnit.Millilitre,
         ContractUnit.Each => DomainUnit.Each,
+        ContractUnit.Kilogram => DomainUnit.Kilogram,
+        ContractUnit.Pound => DomainUnit.Pound,
+        ContractUnit.Litre => DomainUnit.Litre,
         _ => throw new ArgumentOutOfRangeException(nameof(unit), unit, "Unknown measurement unit."),
     };
 
