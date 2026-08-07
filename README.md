@@ -307,13 +307,28 @@ The application version flows from one source:
 2. **Deployment** — pass `VERSION=x.y.z` to `docker compose build` (or set it in the environment)
    to bake a real version into both images.
 3. **GitHub Release** — pushing a tag like `v1.0.0` triggers the
-   [release workflow](.github/workflows/release.yml), which validates the build, runs tests, and
-   creates a GitHub Release with auto-generated notes. Tags containing a hyphen (e.g.,
-   `v1.0.0-alpha.1`) are marked as pre-releases.
+   [release workflow](.github/workflows/release.yml), which validates the build, runs tests, builds
+   both Docker images with the version baked in, and attaches them as compressed tarballs to the
+   GitHub Release. Tags containing a hyphen (e.g., `v1.0.0-alpha.1`) are marked as pre-releases.
 
 The Dockerfiles accept a `VERSION` build arg and pass it to `dotnet publish /p:Version=${VERSION}`.
 The web UI reads the assembly `InformationalVersion` at runtime and displays it at the bottom of the
 navigation drawer.
+
+### Deploy from a release
+
+Download the image tarballs from a [GitHub Release](https://github.com/cam96/MealPlanner/releases)
+and load them on the server:
+
+```bash
+gunzip mealplanner-api-1.0.0.tar.gz mealplanner-web-1.0.0.tar.gz
+docker load -i mealplanner-api-1.0.0.tar
+docker load -i mealplanner-web-1.0.0.tar
+docker compose up -d
+```
+
+Because the images are pre-built with the version already embedded, no source code or .NET SDK is
+needed on the server — just Docker.
 
 ## Data safety
 

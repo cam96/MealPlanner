@@ -42,9 +42,38 @@ jobs:
       - name: Test
         run: dotnet test --no-build -c Release --verbosity normal
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/MealPlanner.Api/Dockerfile
+          build-args: VERSION=${{ steps.version.outputs.VERSION }}
+          tags: mealplanner-api:${{ steps.version.outputs.VERSION }}
+          outputs: type=docker,dest=mealplanner-api-${{ steps.version.outputs.VERSION }}.tar
+
+      - name: Build Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/MealPlanner.Web/Dockerfile
+          build-args: VERSION=${{ steps.version.outputs.VERSION }}
+          tags: mealplanner-web:${{ steps.version.outputs.VERSION }}
+          outputs: type=docker,dest=mealplanner-web-${{ steps.version.outputs.VERSION }}.tar
+
+      - name: Compress images
+        run: |
+          gzip mealplanner-api-${{ steps.version.outputs.VERSION }}.tar
+          gzip mealplanner-web-${{ steps.version.outputs.VERSION }}.tar
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           prerelease: ${{ steps.prerelease.outputs.IS_PRERELEASE == 'true' }}
           name: v${{ steps.version.outputs.VERSION }}
+          files: |
+            mealplanner-api-${{ steps.version.outputs.VERSION }}.tar.gz
+            mealplanner-web-${{ steps.version.outputs.VERSION }}.tar.gz
