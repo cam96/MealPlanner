@@ -116,6 +116,7 @@ else if (_list is not null)
                             <th style="text-align:right;">Packages</th>
                             <th style="text-align:right;">Cost</th>
                             <th>Flags</th>
+                            <th>Price</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -161,6 +162,8 @@ else if (_list is not null)
                                             <MudChip T="string" Size="Size.Small" Class="ma-1">Shared</MudChip>
                                         </MudTooltip>
                                     }
+                                </td>
+                                <td>
                                     <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
                                                    Size="Size.Small"
                                                    OnClick="@(() => ShowPricesAsync(line.IngredientId, line.IngredientName))" />
@@ -209,6 +212,9 @@ else if (_list is not null)
                                                Size="Size.Small"
                                                OnClick="@(() => ShowPricesAsync(item.IngredientId.Value, item.Name))" />
                             }
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                           Size="Size.Small"
+                                           OnClick="@(() => EditManualItemAsync(item))" />
                             <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                            Size="Size.Small"
                                            OnClick="@(() => DeleteManualItemAsync(item.Id))" />
@@ -225,7 +231,8 @@ else if (_list is not null)
                             <th style="width: 48px;"></th>
                             <th>Item</th>
                             <th style="text-align:right;">Quantity</th>
-                            <th style="width: 120px;"></th>
+                            <th>Price</th>
+                            <th style="width: 100px;"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -263,6 +270,11 @@ else if (_list is not null)
                                                        Size="Size.Small"
                                                        OnClick="@(() => RecordPriceForIngredientAsync(item.IngredientId.Value, item.Name))" />
                                     }
+                                </td>
+                                <td>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => EditManualItemAsync(item))" />
                                     <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                                    Size="Size.Small"
                                                    OnClick="@(() => DeleteManualItemAsync(item.Id))" />
@@ -492,6 +504,33 @@ else if (_list is not null)
         catch (HttpRequestException)
         {
             Snackbar.Add("Could not delete the item.", Severity.Error);
+        }
+    }
+
+    private async Task EditManualItemAsync(ManualShoppingItemDto item)
+    {
+        var parameters = new DialogParameters<AddShoppingItemDialog>
+        {
+            { x => x.Existing, item },
+        };
+        var options = DialogHelper.FormDialog();
+        var dialog = await DialogService.ShowAsync<AddShoppingItemDialog>("Edit item", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not AddManualShoppingItemRequest request)
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.UpdateManualShoppingItemAsync(_year, _month, item.Id, request);
+            Snackbar.Add("Item updated.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not update the item.", Severity.Error);
         }
     }
 

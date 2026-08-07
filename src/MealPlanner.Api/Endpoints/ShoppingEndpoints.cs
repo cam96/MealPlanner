@@ -24,6 +24,7 @@ public static class ShoppingEndpoints
         group.MapGet("/", GetAsync);
 
         group.MapPost("/manual-items", AddManualItemAsync);
+        group.MapPut("/manual-items/{id:int}", UpdateManualItemAsync);
         group.MapDelete("/manual-items/{id:int}", DeleteManualItemAsync);
         group.MapPut("/manual-items/{id:int}/cart", ToggleManualItemCartAsync);
 
@@ -231,6 +232,51 @@ public static class ShoppingEndpoints
         return TypedResults.Created(
             $"/api/plans/{year}/{month}/shopping-list/manual-items/{item.Id}",
             item.ToDto(itemPrices));
+    }
+
+    private static async Task<Results<Ok<ManualShoppingItemDto>, NotFound, ValidationProblem>> UpdateManualItemAsync(
+        int year,
+        int month,
+        int id,
+        AddManualShoppingItemRequest request,
+        MealPlannerDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var item = await db.ManualShoppingItems
+            .FirstOrDefaultAsync(m => m.Id == id && m.Year == year && m.Month == month, cancellationToken);
+
+        if (item is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        var errors = new Dictionary<string, string[]>();
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            errors[nameof(request.Name)] = ["An item name is required."];
+        }
+
+        if (request.Quantity is < 0)
+        {
+            errors[nameof(request.Quantity)] = ["Quantity cannot be negative."];
+        }
+
+        if (request.IngredientId is > 0
+            && !await db.Ingredients.AnyAsync(i => i.Id == request.IngredientId, cancellationToken))
+        {
+            errors[nameof(request.IngredientId)] = ["The specified ingredient does not exist."];
+        }
+
+        if (errors.Count > 0)
+        {
+            return TypedResults.ValidationProblem(errors);
+        }
+
+        item.Apply(request);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return TypedResults.Ok(item.ToDto());
     }
 
     private static async Task<Results<NoContent, NotFound>> DeleteManualItemAsync(

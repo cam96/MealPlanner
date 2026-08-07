@@ -45,7 +45,9 @@
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync">Add</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync">
+            @(Existing is not null ? "Save" : "Add")
+        </MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -58,8 +60,28 @@
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 
+    /// <summary>The existing item to edit, or <see langword="null"/> to create a new item.</summary>
+    [Parameter]
+    public ManualShoppingItemDto? Existing { get; set; }
+
     private bool CanSubmit =>
         _model.Ingredient is not null || !string.IsNullOrWhiteSpace(_searchText);
+
+    /// <inheritdoc />
+    protected override void OnParametersSet()
+    {
+        if (Existing is { } item)
+        {
+            _searchText = item.Name;
+            _model.Quantity = item.Quantity;
+            _model.Unit = item.Unit;
+
+            if (item.IngredientId.HasValue)
+            {
+                _model.Ingredient = new IngredientDto(item.IngredientId.Value, item.Name, null);
+            }
+        }
+    }
 
     private async Task<IEnumerable<IngredientDto>> SearchIngredientsAsync(string? value, CancellationToken ct)
     {

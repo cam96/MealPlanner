@@ -627,6 +627,24 @@ public sealed class MealPlannerApiClient(HttpClient httpClient)
         return await response.Content.ReadFromJsonAsync<ManualShoppingItemDto>(JsonOptions, cancellationToken);
     }
 
+    /// <summary>Updates a manual item on the shopping list.</summary>
+    /// <param name="year">The calendar year.</param>
+    /// <param name="month">The calendar month (1-12).</param>
+    /// <param name="id">The manual item identifier.</param>
+    /// <param name="request">The updated item details.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    public async Task UpdateManualShoppingItemAsync(
+        int year,
+        int month,
+        int id,
+        AddManualShoppingItemRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PutAsJsonAsync(
+            $"/api/plans/{year}/{month}/shopping-list/manual-items/{id}", request, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
     /// <summary>Deletes a manual item from the shopping list.</summary>
     /// <param name="year">The calendar year.</param>
     /// <param name="month">The calendar month (1-12).</param>
