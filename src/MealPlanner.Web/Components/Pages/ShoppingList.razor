@@ -56,6 +56,15 @@ else if (_list is not null)
         }
     </MudPaper>
 
+    @if (UnpricedCount > 0)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3" Icon="@Icons.Material.Filled.WarningAmber">
+            @UnpricedCount item@(UnpricedCount == 1 ? " has" : "s have") no recorded price and
+            @(UnpricedCount == 1 ? "is" : "are") not included in the total.
+            Record prices to get an accurate budget estimate.
+        </MudAlert>
+    }
+
     @* To Buy section *@
     @if (ToBuyLines.Count == 0 && ToBuyManual.Count == 0)
     {
@@ -87,6 +96,10 @@ else if (_list is not null)
                                     <MudText Typo="Typo.caption" Class="mud-text-secondary">
                                         @line.ToBuyQuantity.ToString("0.#") @UnitLabel(line.Unit) · @line.EstimatedCost.ToString("C", Culture)@(line.IsCostEstimated ? "*" : "")
                                     </MudText>
+                                    @if (line.IsCostEstimated && line.EstimatedCost == 0)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" Color="Color.Warning" />
+                                    }
                                     @if (line.IsDeal)
                                     {
                                         <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="pa-0" Style="height:18px;font-size:0.65rem;">Deal</MudChip>
@@ -145,6 +158,12 @@ else if (_list is not null)
                                 <td style="text-align:right;">@(line.PackagesToBuy > 0 ? line.PackagesToBuy.ToString() : "-")</td>
                                 <td style="text-align:right;">
                                     @line.EstimatedCost.ToString("C", Culture)@(line.IsCostEstimated ? "*" : string.Empty)
+                                    @if (line.IsCostEstimated && line.EstimatedCost == 0)
+                                    {
+                                        <MudTooltip Text="No price recorded for this ingredient">
+                                            <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" Color="Color.Warning" />
+                                        </MudTooltip>
+                                    }
                                 </td>
                                 <td>
                                     @if (line.IsDeal)
@@ -208,12 +227,24 @@ else if (_list is not null)
                                 <MudText Typo="Typo.body2" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                     @item.Name
                                 </MudText>
-                                @if (item.Quantity.HasValue)
-                                {
-                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                        @item.Quantity.Value.ToString("0.#")@(item.Unit.HasValue ? $" {UnitLabel(item.Unit.Value)}" : "")
-                                    </MudText>
-                                }
+                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                    @if (item.Quantity.HasValue)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            @item.Quantity.Value.ToString("0.#")@(item.Unit.HasValue ? $" {UnitLabel(item.Unit.Value)}" : "")
+                                        </MudText>
+                                    }
+                                    @if (item.EstimatedCost > 0)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            · @item.EstimatedCost.ToString("C", Culture)@(item.IsCostEstimated ? "*" : "")
+                                        </MudText>
+                                    }
+                                    else if (item.IsCostEstimated)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" Color="Color.Warning" />
+                                    }
+                                </MudStack>
                             </MudStack>
                             @if (item.IngredientId.HasValue)
                             {
@@ -243,6 +274,7 @@ else if (_list is not null)
                             <th style="width: 48px;"></th>
                             <th>Item</th>
                             <th style="text-align:right;">Quantity</th>
+                            <th style="text-align:right;">Cost</th>
                             <th>Price</th>
                             <th style="width: 100px;"></th>
                         </tr>
@@ -270,6 +302,18 @@ else if (_list is not null)
                                     else
                                     {
                                         <text>-</text>
+                                    }
+                                </td>
+                                <td style="text-align:right;">
+                                    @if (item.EstimatedCost > 0)
+                                    {
+                                        @item.EstimatedCost.ToString("C", Culture)@(item.IsCostEstimated ? "*" : string.Empty)
+                                    }
+                                    else if (item.IsCostEstimated)
+                                    {
+                                        <MudTooltip Text="No price recorded for this item">
+                                            <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" Color="Color.Warning" />
+                                        </MudTooltip>
                                     }
                                 </td>
                                 <td>
@@ -443,6 +487,21 @@ else if (_list is not null)
         _list?.ManualItems.Where(m => m.IsInCart).ToList() ?? [];
 
     private bool HasCartItems => InCartLines.Count > 0 || InCartManual.Count > 0;
+
+    private int UnpricedCount
+    {
+        get
+        {
+            if (_list is null)
+            {
+                return 0;
+            }
+
+            var unpricedGenerated = _list.Lines.Count(l => l.IsCostEstimated && l.EstimatedCost == 0);
+            var unpricedManual = _list.ManualItems.Count(m => m.IsCostEstimated && m.EstimatedCost == 0);
+            return unpricedGenerated + unpricedManual;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
