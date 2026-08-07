@@ -1,6 +1,7 @@
 @page "/shopping-list"
 @using System.Globalization
 @using MealPlanner.Contracts
+@using MealPlanner.Contracts.Ingredients
 @using MealPlanner.Contracts.Shopping
 @inject MealPlannerApiClient Api
 @inject ISnackbar Snackbar
@@ -63,13 +64,28 @@ else if (_list is not null)
     @* Add manual item form *@
     <MudPaper Class="pa-4 mb-4" Elevation="1">
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-            <MudTextField @bind-Value="_newItemName"
-                          Label="Add an item"
-                          Placeholder="e.g. Paper towels"
-                          Variant="Variant.Outlined"
-                          Immediate="true"
-                          OnKeyDown="OnAddItemKeyDownAsync"
-                          Style="flex: 1;" />
+            <MudAutocomplete T="IngredientDto"
+                             Label="Add an item"
+                             Placeholder="Search ingredients or type a custom name"
+                             Value="_selectedIngredient"
+                             ValueChanged="OnIngredientSelected"
+                             SearchFunc="SearchIngredientsAsync"
+                             ToStringFunc="@(i => i?.Name ?? string.Empty)"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="false"
+                             CoerceValue="false"
+                             Variant="Variant.Outlined"
+                             Adornment="Adornment.Start"
+                             AdornmentIcon="@Icons.Material.Filled.Search"
+                             Style="flex: 1;"
+                             TextChanged="OnSearchTextChanged"
+                             OnKeyDown="OnAddItemKeyDownAsync">
+                <NoItemsTemplate>
+                    <MudText Typo="Typo.body2" Class="pa-2">
+                        No matching ingredients. Press <b>Add</b> to add as custom text.
+                    </MudText>
+                </NoItemsTemplate>
+            </MudAutocomplete>
             <MudNumericField @bind-Value="_newItemQuantity"
                              Label="Qty"
                              Variant="Variant.Outlined"
@@ -87,7 +103,7 @@ else if (_list is not null)
             <MudButton Variant="Variant.Filled"
                        Color="Color.Primary"
                        OnClick="AddManualItemAsync"
-                       Disabled="@string.IsNullOrWhiteSpace(_newItemName)"
+                       Disabled="@(!CanAddItem)"
                        StartIcon="@Icons.Material.Filled.Add">
                 Add
             </MudButton>
@@ -176,6 +192,7 @@ else if (_list is not null)
                         <th style="width: 48px;"></th>
                         <th>Item</th>
                         <th style="text-align:right;">Quantity</th>
+                        <th style="text-align:right;">Price</th>
                         <th style="width: 48px;"></th>
                     </tr>
                 </thead>
@@ -189,7 +206,14 @@ else if (_list is not null)
                                              ValueChanged="@(_ => ToggleManualCartAsync(item.Id))"
                                              Color="Color.Primary" />
                             </td>
-                            <td>@item.Name</td>
+                            <td>
+                                @item.Name
+                                @if (item.IngredientId.HasValue)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small"
+                                             Class="ml-1 mud-text-secondary" />
+                                }
+                            </td>
                             <td style="text-align:right;">
                                 @if (item.Quantity.HasValue)
                                 {
@@ -198,6 +222,35 @@ else if (_list is not null)
                                     {
                                         @(" ")@UnitLabel(item.Unit.Value)
                                     }
+                                }
+                                else
+                                {
+                                    <text>-</text>
+                                }
+                            </td>
+                            <td style="text-align:right;">
+                                @if (item.Prices.Count > 0)
+                                {
+                                    var preferred = item.Prices.FirstOrDefault(p => p.IsPreferredStore)
+                                                   ?? item.Prices[0];
+                                    <MudTooltip>
+                                        <ChildContent>
+                                            <span>@preferred.Price.ToString("C", Culture)</span>
+                                        </ChildContent>
+                                        <TooltipContent>
+                                            <MudStack Spacing="1">
+                                                @foreach (var price in item.Prices.Take(5))
+                                                {
+                                                    <MudText Typo="Typo.caption">
+                                                        @price.StoreName: @price.Price.ToString("C", Culture)
+                                                        (@price.PackageQuantity.ToString("0.#") @UnitLabel(price.PackageUnit))
+                                                        — @price.RecordedDate.ToString("MMM d, yyyy")
+                                                        @(price.IsPreferredStore ? " ★" : "")
+                                                    </MudText>
+                                                }
+                                            </MudStack>
+                                        </TooltipContent>
+                                    </MudTooltip>
                                 }
                                 else
                                 {
@@ -295,9 +348,12 @@ else if (_list is not null)
     private int _year = DateTime.Today.Year;
     private int _month = DateTime.Today.Month;
 
-    private string _newItemName = string.Empty;
+    private IngredientDto? _selectedIngredient;
+    private string _searchText = string.Empty;
     private double? _newItemQuantity;
     private MeasurementUnit? _newItemUnit;
+
+    private bool CanAddItem => _selectedIngredient is not null || !string.IsNullOrWhiteSpace(_searchText);
 
     private string MonthLabel =>
         new DateOnly(_year, _month, 1).ToString("MMMM yyyy", CultureInfo.CurrentCulture);
@@ -356,9 +412,37 @@ else if (_list is not null)
         await LoadAsync();
     }
 
+    private async Task<IEnumerable<IngredientDto>> SearchIngredientsAsync(string value, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        return await Api.SearchIngredientsAsync(value, 10, ct);
+    }
+
+    private void OnIngredientSelected(IngredientDto? ingredient)
+    {
+        _selectedIngredient = ingredient;
+        if (ingredient is not null)
+        {
+            _searchText = ingredient.Name;
+        }
+    }
+
+    private void OnSearchTextChanged(string text)
+    {
+        _searchText = text ?? string.Empty;
+        if (_selectedIngredient is not null && _selectedIngredient.Name != text)
+        {
+            _selectedIngredient = null;
+        }
+    }
+
     private async Task OnAddItemKeyDownAsync(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_newItemName))
+        if (e.Key == "Enter" && CanAddItem)
         {
             await AddManualItemAsync();
         }
@@ -366,16 +450,19 @@ else if (_list is not null)
 
     private async Task AddManualItemAsync()
     {
-        if (string.IsNullOrWhiteSpace(_newItemName))
+        if (!CanAddItem)
         {
             return;
         }
 
         try
         {
-            var request = new AddManualShoppingItemRequest(_newItemName, _newItemQuantity, _newItemUnit);
+            var name = _selectedIngredient?.Name ?? _searchText.Trim();
+            var ingredientId = _selectedIngredient?.Id;
+            var request = new AddManualShoppingItemRequest(name, ingredientId, _newItemQuantity, _newItemUnit);
             await Api.AddManualShoppingItemAsync(_year, _month, request);
-            _newItemName = string.Empty;
+            _selectedIngredient = null;
+            _searchText = string.Empty;
             _newItemQuantity = null;
             _newItemUnit = null;
             await LoadAsync();

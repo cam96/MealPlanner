@@ -3,7 +3,8 @@ namespace MealPlanner.Domain.Entities;
 /// <summary>
 /// An item manually added to a shopping list by the user, independent of any meal plan. Manual
 /// items let users track extra purchases (cleaning supplies, snacks, etc.) alongside the
-/// auto-generated ingredient list.
+/// auto-generated ingredient list. When linked to an <see cref="Ingredient"/>, the item inherits
+/// pricing information.
 /// </summary>
 public class ManualShoppingItem
 {
@@ -18,6 +19,12 @@ public class ManualShoppingItem
 
     /// <summary>Gets or sets the free-text name of the item to buy.</summary>
     public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the optional link to an ingredient for pricing lookups.</summary>
+    public int? IngredientId { get; set; }
+
+    /// <summary>Gets or sets the linked ingredient. Populated by EF Core when included.</summary>
+    public Ingredient? Ingredient { get; set; }
 
     /// <summary>Gets or sets an optional quantity to buy.</summary>
     public double? Quantity { get; set; }

@@ -38,22 +38,43 @@ public record ShoppingListLineDto(
 /// <summary>A user-added item on the shopping list, not derived from a meal plan.</summary>
 /// <param name="Id">The manual item identifier.</param>
 /// <param name="Name">The free-text item name.</param>
+/// <param name="IngredientId">The linked ingredient identifier, when the item is an ingredient.</param>
 /// <param name="Quantity">An optional quantity to buy.</param>
 /// <param name="Unit">The unit the quantity is expressed in, when specified.</param>
 /// <param name="IsInCart">Whether the item has been placed in the cart (checked off).</param>
+/// <param name="Prices">Price observations for the linked ingredient, empty when unlinked.</param>
 public record ManualShoppingItemDto(
     int Id,
     string Name,
+    int? IngredientId,
     double? Quantity,
     MeasurementUnit? Unit,
-    bool IsInCart);
+    bool IsInCart,
+    IReadOnlyList<ManualItemPriceDto> Prices);
+
+/// <summary>A price observation for a manual shopping item linked to an ingredient.</summary>
+/// <param name="StoreName">The store where the price was recorded.</param>
+/// <param name="Price">The package price in Canadian dollars.</param>
+/// <param name="PackageQuantity">The quantity in the priced package.</param>
+/// <param name="PackageUnit">The unit the package quantity is expressed in.</param>
+/// <param name="RecordedDate">The date the price was observed.</param>
+/// <param name="IsPreferredStore">Whether this is the preferred store for the ingredient.</param>
+public record ManualItemPriceDto(
+    string StoreName,
+    decimal Price,
+    double PackageQuantity,
+    MeasurementUnit PackageUnit,
+    DateOnly RecordedDate,
+    bool IsPreferredStore);
 
 /// <summary>Payload to add a manual item to the shopping list.</summary>
-/// <param name="Name">The free-text item name.</param>
+/// <param name="Name">The free-text item name (used when not linked to an ingredient).</param>
+/// <param name="IngredientId">Optional ingredient to link the item to for pricing.</param>
 /// <param name="Quantity">An optional quantity to buy.</param>
 /// <param name="Unit">The unit the quantity is expressed in, when specified.</param>
 public record AddManualShoppingItemRequest(
     string Name,
+    int? IngredientId,
     double? Quantity,
     MeasurementUnit? Unit);
 

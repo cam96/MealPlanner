@@ -66,13 +66,50 @@ public static class ShoppingEndpoints
             .Select(e => e.IngredientId)
             .ToHashSetAsync(cancellationToken);
 
-        // Load manual items for this month.
-        var manualItems = await db.ManualShoppingItems
+        // Load manual items for this month with their linked ingredients.
+        var manualEntities = await db.ManualShoppingItems
             .AsNoTracking()
+            .Include(m => m.Ingredient)
             .Where(m => m.Year == year && m.Month == month)
             .OrderBy(m => m.CreatedAt)
-            .Select(m => m.ToDto())
             .ToListAsync(cancellationToken);
+
+        // Load prices for any linked ingredients on manual items.
+        var linkedIngredientIds = manualEntities
+            .Where(m => m.IngredientId.HasValue)
+            .Select(m => m.IngredientId!.Value)
+            .Distinct()
+            .ToList();
+
+        var manualItemPrices = linkedIngredientIds.Count > 0
+            ? await db.IngredientPrices
+                .AsNoTracking()
+                .Include(p => p.Store)
+                .Where(p => linkedIngredientIds.Contains(p.IngredientId))
+                .ToListAsync(cancellationToken)
+            : [];
+
+        var pricesByIngredient = manualItemPrices
+            .GroupBy(p => p.IngredientId)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<ManualItemPriceDto>)g
+                    .OrderByDescending(p => p.RecordedDate)
+                    .Select(p => new ManualItemPriceDto(
+                        p.Store?.Name ?? string.Empty,
+                        p.Price,
+                        p.PackageQuantity,
+                        p.PackageUnit.ToContract(),
+                        p.RecordedDate,
+                        p.IsPreferredStore))
+                    .ToList());
+
+        var manualItems = manualEntities
+            .Select(m => m.ToDto(
+                m.IngredientId.HasValue && pricesByIngredient.TryGetValue(m.IngredientId.Value, out var prices)
+                    ? prices
+                    : null))
+            .ToList();
 
         if (plan is null)
         {
@@ -150,6 +187,12 @@ public static class ShoppingEndpoints
             errors[nameof(request.Quantity)] = ["Quantity cannot be negative."];
         }
 
+        if (request.IngredientId is > 0
+            && !await db.Ingredients.AnyAsync(i => i.Id == request.IngredientId, cancellationToken))
+        {
+            errors[nameof(request.IngredientId)] = ["The specified ingredient does not exist."];
+        }
+
         if (errors.Count > 0)
         {
             return TypedResults.ValidationProblem(errors);
@@ -166,9 +209,28 @@ public static class ShoppingEndpoints
         db.ManualShoppingItems.Add(item);
         await db.SaveChangesAsync(cancellationToken);
 
+        // Load prices for linked ingredient to return in response.
+        IReadOnlyList<ManualItemPriceDto>? itemPrices = null;
+        if (item.IngredientId.HasValue)
+        {
+            itemPrices = await db.IngredientPrices
+                .AsNoTracking()
+                .Include(p => p.Store)
+                .Where(p => p.IngredientId == item.IngredientId.Value)
+                .OrderByDescending(p => p.RecordedDate)
+                .Select(p => new ManualItemPriceDto(
+                    p.Store!.Name,
+                    p.Price,
+                    p.PackageQuantity,
+                    p.PackageUnit.ToContract(),
+                    p.RecordedDate,
+                    p.IsPreferredStore))
+                .ToListAsync(cancellationToken);
+        }
+
         return TypedResults.Created(
             $"/api/plans/{year}/{month}/shopping-list/manual-items/{item.Id}",
-            item.ToDto());
+            item.ToDto(itemPrices));
     }
 
     private static async Task<Results<NoContent, NotFound>> DeleteManualItemAsync(
