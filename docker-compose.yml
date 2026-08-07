@@ -6,6 +6,8 @@ services:
     build:
       context: .
       dockerfile: src/MealPlanner.Api/Dockerfile
+      args:
+        VERSION: ${VERSION:-0.0.0-dev}
     image: mealplanner-api
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -37,6 +39,8 @@ services:
     build:
       context: .
       dockerfile: src/MealPlanner.Web/Dockerfile
+      args:
+        VERSION: ${VERSION:-0.0.0-dev}
     image: mealplanner-web
     environment:
       ASPNETCORE_ENVIRONMENT: Production
