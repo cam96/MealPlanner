@@ -162,4 +162,109 @@ public class NutritionCalculatorTests
     [Test]
     public void PerServing_NullRecipe_Throws() =>
         Assert.Throws<ArgumentNullException>(() => NutritionCalculator.PerServing(null!));
+
+    [Test]
+    public void ForRecipe_MultipleIngredients_AccumulatesCorrectly()
+    {
+        var flour = Flour();
+        var egg = new Ingredient
+        {
+            Id = 2,
+            Name = "Egg",
+            BaseUnit = MeasurementUnit.Gram,
+            CaloriesPer100 = 155,
+            ProteinPer100 = 13,
+            FiberPer100 = 0,
+            CarbsPer100 = 1.1,
+            FatPer100 = 11,
+            ServingWeightG = 50,
+        };
+        var recipe = new Recipe
+        {
+            Name = "Bread with egg wash",
+            Servings = 1,
+            Ingredients =
+            {
+                new RecipeIngredient { IngredientId = 1, Ingredient = flour, Quantity = 100, Unit = MeasurementUnit.Gram },
+                new RecipeIngredient { IngredientId = 2, Ingredient = egg, Quantity = 50, Unit = MeasurementUnit.Gram },
+            },
+        };
+
+        var facts = NutritionCalculator.ForRecipe(recipe);
+
+        Assert.Multiple(() =>
+        {
+            // 100g flour (364) + 50g egg (155/2) = 364 + 77.5 = 441.5
+            Assert.That(facts.Calories, Is.EqualTo(441.5).Within(0.001));
+            // 100g flour (10) + 50g egg (13/2) = 10 + 6.5 = 16.5
+            Assert.That(facts.Protein, Is.EqualTo(16.5).Within(0.001));
+            Assert.That(facts.IsEstimated, Is.False);
+        });
+    }
+
+    [Test]
+    public void PerServing_ServingsOfZero_TreatedAsOne()
+    {
+        var recipe = new Recipe
+        {
+            Name = "Edge case",
+            Servings = 0,
+            Ingredients =
+            {
+                new RecipeIngredient { IngredientId = 1, Ingredient = Flour(), Quantity = 100, Unit = MeasurementUnit.Gram },
+            },
+        };
+
+        var facts = NutritionCalculator.PerServing(recipe);
+
+        // Should not divide by zero; Servings clamped to 1
+        Assert.That(facts.Calories, Is.EqualTo(364).Within(0.001));
+    }
+
+    [Test]
+    public void ForRecipe_EmptyIngredients_ReturnsZeroNutrition()
+    {
+        var recipe = new Recipe { Name = "Empty", Servings = 2 };
+
+        var facts = NutritionCalculator.ForRecipe(recipe);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(facts.Calories, Is.EqualTo(0));
+            Assert.That(facts.Protein, Is.EqualTo(0));
+            Assert.That(facts.IsEstimated, Is.False);
+        });
+    }
+
+    [Test]
+    public void ForRecipe_EachLineWithoutServingWeight_FlagsEstimatedAndSkips()
+    {
+        // Ingredient base unit is Gram but has no serving weight; recipe uses Each.
+        var ingredient = new Ingredient
+        {
+            Id = 3,
+            Name = "Banana",
+            BaseUnit = MeasurementUnit.Gram,
+            CaloriesPer100 = 89,
+            ProteinPer100 = 1.1,
+            ServingWeightG = null,
+        };
+        var recipe = new Recipe
+        {
+            Name = "Fruit bowl",
+            Servings = 1,
+            Ingredients =
+            {
+                new RecipeIngredient { IngredientId = 3, Ingredient = ingredient, Quantity = 2, Unit = MeasurementUnit.Each },
+            },
+        };
+
+        var facts = NutritionCalculator.ForRecipe(recipe);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(facts.Calories, Is.EqualTo(0));
+            Assert.That(facts.IsEstimated, Is.True);
+        });
+    }
 }

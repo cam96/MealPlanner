@@ -185,4 +185,117 @@ public class PlanAggregatorTests
     [Test]
     public void PerPersonPerDay_NullPeople_Throws() =>
         Assert.Throws<ArgumentNullException>(() => PlanAggregator.PerPersonPerDay(new MealPlan(), null!));
+
+    [Test]
+    public void PerPersonPerDay_SecondPersonMeal_CountsForSecondPersonOnly()
+    {
+        var recipe = Bread();
+        var plan = new MealPlan
+        {
+            Year = 2026,
+            Month = 1,
+            Days =
+            {
+                new DayPlan
+                {
+                    Date = new DateOnly(2026, 1, 6),
+                    DayType = DayType.Normal,
+                    Meals =
+                    {
+                        new PlannedMeal { Slot = MealType.Lunch, Assignee = MealAssignee.SecondPerson, Recipe = recipe, RecipeId = 1, Servings = 1 },
+                    },
+                },
+            },
+        };
+
+        var result = PlanAggregator.PerPersonPerDay(plan, TwoPeople());
+
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result[0].PersonId, Is.EqualTo(2));
+            Assert.That(result[0].Nutrition.Calories, Is.EqualTo(364).Within(0.001));
+        });
+    }
+
+    [Test]
+    public void PerPersonPerDay_MultipleMealsSameDay_Accumulates()
+    {
+        var recipe = Bread();
+        var plan = new MealPlan
+        {
+            Year = 2026,
+            Month = 1,
+            Days =
+            {
+                new DayPlan
+                {
+                    Date = new DateOnly(2026, 1, 5),
+                    DayType = DayType.Normal,
+                    Meals =
+                    {
+                        new PlannedMeal { Slot = MealType.Lunch, Assignee = MealAssignee.FirstPerson, Recipe = recipe, RecipeId = 1, Servings = 1 },
+                        new PlannedMeal { Slot = MealType.Dinner, Assignee = MealAssignee.FirstPerson, Recipe = recipe, RecipeId = 1, Servings = 1 },
+                    },
+                },
+            },
+        };
+
+        var result = PlanAggregator.PerPersonPerDay(plan, TwoPeople());
+
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Nutrition.Calories, Is.EqualTo(728).Within(0.001));
+    }
+
+    [Test]
+    public void PerPersonPerDay_MealComboWithNoRecipe_IsSkipped()
+    {
+        var plan = new MealPlan
+        {
+            Year = 2026,
+            Month = 1,
+            Days =
+            {
+                new DayPlan
+                {
+                    Date = new DateOnly(2026, 1, 5),
+                    DayType = DayType.Normal,
+                    Meals =
+                    {
+                        new PlannedMeal
+                        {
+                            Slot = MealType.Dinner,
+                            Assignee = MealAssignee.Shared,
+                            Recipe = null,
+                            MealCombo = new MealCombo { Id = 1, Name = "Test combo" },
+                            MealComboId = 1,
+                            Servings = 2,
+                        },
+                    },
+                },
+            },
+        };
+
+        var result = PlanAggregator.PerPersonPerDay(plan, TwoPeople());
+
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public void PerPersonPerDay_EmptyPlan_ReturnsEmpty()
+    {
+        var plan = new MealPlan { Year = 2026, Month = 1 };
+
+        var result = PlanAggregator.PerPersonPerDay(plan, TwoPeople());
+
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public void PerPersonMonth_NullPlan_Throws() =>
+        Assert.Throws<ArgumentNullException>(() => PlanAggregator.PerPersonMonth(null!, TwoPeople()));
+
+    [Test]
+    public void PerPersonMonth_NullPeople_Throws() =>
+        Assert.Throws<ArgumentNullException>(() => PlanAggregator.PerPersonMonth(new MealPlan(), null!));
 }

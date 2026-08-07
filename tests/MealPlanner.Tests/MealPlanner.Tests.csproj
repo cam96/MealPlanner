@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="NUnit" />
@@ -19,6 +23,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\MealPlanner.Domain\MealPlanner.Domain.csproj" />
     <ProjectReference Include="..\..\src\MealPlanner.Data\MealPlanner.Data.csproj" />
+    <ProjectReference Include="..\..\src\MealPlanner.Api\MealPlanner.Api.csproj" />
+    <ProjectReference Include="..\..\src\MealPlanner.Contracts\MealPlanner.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
