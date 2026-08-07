@@ -677,22 +677,6 @@ public sealed class MealPlannerApiClient(HttpClient httpClient)
         response.EnsureSuccessStatusCode();
     }
 
-    /// <summary>Toggles the cart status of a generated (meal-plan-derived) shopping list item.</summary>
-    /// <param name="year">The calendar year.</param>
-    /// <param name="month">The calendar month (1-12).</param>
-    /// <param name="ingredientId">The ingredient identifier.</param>
-    /// <param name="cancellationToken">A token to cancel the request.</param>
-    public async Task ToggleGeneratedItemCartAsync(
-        int year,
-        int month,
-        int ingredientId,
-        CancellationToken cancellationToken = default)
-    {
-        using var response = await httpClient.PutAsync(
-            $"/api/plans/{year}/{month}/shopping-list/items/{ingredientId}/cart", null, cancellationToken);
-        response.EnsureSuccessStatusCode();
-    }
-
     /// <summary>Clears all items currently in the cart for a month's shopping list.</summary>
     /// <param name="year">The calendar year.</param>
     /// <param name="month">The calendar month (1-12).</param>
