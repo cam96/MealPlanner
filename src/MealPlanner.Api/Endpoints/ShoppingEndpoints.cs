@@ -2,6 +2,7 @@ using MealPlanner.Api.Mapping;
 using MealPlanner.Contracts.Shopping;
 using MealPlanner.Data;
 using MealPlanner.Domain.Entities;
+using MealPlanner.Domain.Nutrition;
 using MealPlanner.Domain.Shopping;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
@@ -90,11 +91,14 @@ public static class ShoppingEndpoints
                 .ToListAsync(cancellationToken)
             : [];
 
-        var pricesByIngredient = manualItemPrices
+        var manualPricesByIngredient = manualItemPrices
             .GroupBy(p => p.IngredientId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var manualPriceDtosByIngredient = manualPricesByIngredient
             .ToDictionary(
-                g => g.Key,
-                g => (IReadOnlyList<ManualItemPriceDto>)g
+                kvp => kvp.Key,
+                kvp => (IReadOnlyList<ManualItemPriceDto>)kvp.Value
                     .OrderByDescending(p => p.RecordedDate)
                     .Select(p => new ManualItemPriceDto(
                         p.Store?.Name ?? string.Empty,
@@ -105,16 +109,32 @@ public static class ShoppingEndpoints
                         p.IsPreferredStore))
                     .ToList());
 
+        // Compute costs for manual items and build DTOs.
+        var manualTotalCost = 0m;
+        var anyManualEstimated = false;
         var manualItems = manualEntities
-            .Select(m => m.ToDto(
-                m.IngredientId.HasValue && pricesByIngredient.TryGetValue(m.IngredientId.Value, out var prices)
-                    ? prices
-                    : null))
+            .Select(m =>
+            {
+                var (cost, isCostEstimated) = ComputeManualItemCost(m, manualPricesByIngredient);
+                manualTotalCost += cost;
+                anyManualEstimated |= isCostEstimated;
+
+                var priceDtos = m.IngredientId.HasValue
+                    && manualPriceDtosByIngredient.TryGetValue(m.IngredientId.Value, out var p)
+                    ? p
+                    : null;
+
+                return m.ToDto(cost, isCostEstimated, priceDtos);
+            })
             .ToList();
 
         if (plan is null)
         {
-            var empty = new ShoppingListDto(year, month, [], manualItems, 0m, false, budget, false, budget);
+            var estimatedTotal = manualTotalCost;
+            var isEstimated = anyManualEstimated;
+            var empty = new ShoppingListDto(
+                year, month, [], manualItems, estimatedTotal, isEstimated,
+                budget, budget > 0 && estimatedTotal > budget, budget - estimatedTotal);
             return TypedResults.Ok(empty);
         }
 
@@ -123,12 +143,12 @@ public static class ShoppingEndpoints
             .Include(p => p.Ingredient)
             .ToListAsync(cancellationToken);
 
-        var prices = await db.IngredientPrices
+        var allPrices = await db.IngredientPrices
             .AsNoTracking()
             .Include(p => p.Store)
             .ToListAsync(cancellationToken);
 
-        var list = ShoppingListGenerator.Generate(plan, pantry, prices);
+        var list = ShoppingListGenerator.Generate(plan, pantry, allPrices);
 
         var lines = list.Lines
             .Select(l => new ShoppingListLineDto(
@@ -150,19 +170,75 @@ public static class ShoppingEndpoints
                 cartedIngredientIds.Contains(l.IngredientId)))
             .ToList();
 
+        var totalEstimated = list.EstimatedTotal + manualTotalCost;
+        var totalIsEstimated = list.IsEstimated || anyManualEstimated;
+
         var dto = new ShoppingListDto(
             year,
             month,
             lines,
             manualItems,
-            list.EstimatedTotal,
-            list.IsEstimated,
+            totalEstimated,
+            totalIsEstimated,
             budget,
-            budget > 0 && list.EstimatedTotal > budget,
-            budget - list.EstimatedTotal);
+            budget > 0 && totalEstimated > budget,
+            budget - totalEstimated);
 
         return TypedResults.Ok(dto);
     }
+
+    /// <summary>
+    /// Computes the estimated cost for a manual shopping item using its linked ingredient's
+    /// latest or preferred-store price.
+    /// </summary>
+    private static (decimal Cost, bool IsCostEstimated) ComputeManualItemCost(
+        ManualShoppingItem item,
+        Dictionary<int, List<IngredientPrice>> pricesByIngredient)
+    {
+        if (!item.IngredientId.HasValue || !item.Quantity.HasValue || item.Quantity.Value <= 0
+            || item.Ingredient is null || item.Unit is null)
+        {
+            return (0m, true);
+        }
+
+        if (!pricesByIngredient.TryGetValue(item.IngredientId.Value, out var ingredientPrices)
+            || ingredientPrices.Count == 0)
+        {
+            return (0m, true);
+        }
+
+        var chosen = PickPrice(ingredientPrices);
+        if (chosen is null)
+        {
+            return (0m, true);
+        }
+
+        var ingredient = item.Ingredient;
+        if (!UnitConverter.TryToBaseUnits(
+                ingredient.BaseUnit, ingredient.ServingWeightG, item.Quantity.Value, item.Unit.Value, out var itemBase)
+            || itemBase <= 0)
+        {
+            return (0m, true);
+        }
+
+        if (!UnitConverter.TryToBaseUnits(
+                ingredient.BaseUnit, ingredient.ServingWeightG, chosen.PackageQuantity, chosen.PackageUnit, out var packageBase)
+            || packageBase <= 0)
+        {
+            return (0m, true);
+        }
+
+        var packages = Math.Max(1, (int)Math.Ceiling(itemBase / packageBase));
+        var cost = packages * chosen.Price;
+        return (cost, chosen.IsEstimated);
+    }
+
+    /// <summary>Picks the best price for an ingredient: preferred store first, then most recent.</summary>
+    private static IngredientPrice? PickPrice(IEnumerable<IngredientPrice> prices) =>
+        prices
+            .OrderByDescending(p => p.IsPreferredStore)
+            .ThenByDescending(p => p.RecordedDate)
+            .FirstOrDefault();
 
     private static async Task<Results<Created<ManualShoppingItemDto>, ValidationProblem>> AddManualItemAsync(
         int year,
@@ -231,7 +307,7 @@ public static class ShoppingEndpoints
 
         return TypedResults.Created(
             $"/api/plans/{year}/{month}/shopping-list/manual-items/{item.Id}",
-            item.ToDto(itemPrices));
+            item.ToDto(prices: itemPrices));
     }
 
     private static async Task<Results<Ok<ManualShoppingItemDto>, NotFound, ValidationProblem>> UpdateManualItemAsync(

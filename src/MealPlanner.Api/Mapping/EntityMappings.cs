@@ -398,9 +398,13 @@ internal static class EntityMappings
 
     /// <summary>Projects a <see cref="ManualShoppingItem"/> to a <see cref="ManualShoppingItemDto"/>.</summary>
     /// <param name="item">The entity to project.</param>
+    /// <param name="estimatedCost">The computed cost for this item based on its linked ingredient's price.</param>
+    /// <param name="isCostEstimated">Whether the cost could not be fully determined.</param>
     /// <param name="prices">Price observations for the linked ingredient (empty when unlinked).</param>
     public static ManualShoppingItemDto ToDto(
         this ManualShoppingItem item,
+        decimal estimatedCost = 0m,
+        bool isCostEstimated = true,
         IReadOnlyList<ManualItemPriceDto>? prices = null) => new(
         item.Id,
         item.Name,
@@ -408,6 +412,8 @@ internal static class EntityMappings
         item.Quantity,
         item.Unit?.ToContract(),
         item.IsInCart,
+        estimatedCost,
+        isCostEstimated,
         prices ?? []);
 
     /// <summary>Applies a create request onto a <see cref="ManualShoppingItem"/> entity.</summary>

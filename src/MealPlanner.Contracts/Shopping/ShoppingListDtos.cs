@@ -42,6 +42,8 @@ public record ShoppingListLineDto(
 /// <param name="Quantity">An optional quantity to buy.</param>
 /// <param name="Unit">The unit the quantity is expressed in, when specified.</param>
 /// <param name="IsInCart">Whether the item has been placed in the cart (checked off).</param>
+/// <param name="EstimatedCost">The estimated cost based on the linked ingredient's latest price, in Canadian dollars.</param>
+/// <param name="IsCostEstimated">Whether the cost is estimated or could not be determined (no price or no linked ingredient).</param>
 /// <param name="Prices">Price observations for the linked ingredient, empty when unlinked.</param>
 public record ManualShoppingItemDto(
     int Id,
@@ -50,6 +52,8 @@ public record ManualShoppingItemDto(
     double? Quantity,
     MeasurementUnit? Unit,
     bool IsInCart,
+    decimal EstimatedCost,
+    bool IsCostEstimated,
     IReadOnlyList<ManualItemPriceDto> Prices);
 
 /// <summary>A price observation for a manual shopping item linked to an ingredient.</summary>
