@@ -120,10 +120,10 @@ else if (_list is not null)
                 <tbody>
                     @foreach (var line in group)
                     {
-                        <tr>
+                        <tr @key="line.IngredientId">
                             <td>
                                 <MudCheckBox T="bool"
-                                             Value="false"
+                                             Value="line.IsInCart"
                                              ValueChanged="@(_ => ToggleGeneratedCartAsync(line.IngredientId))"
                                              Color="Color.Primary" />
                             </td>
@@ -182,10 +182,10 @@ else if (_list is not null)
                 <tbody>
                     @foreach (var item in ToBuyManual)
                     {
-                        <tr>
+                        <tr @key="item.Id">
                             <td>
                                 <MudCheckBox T="bool"
-                                             Value="false"
+                                             Value="item.IsInCart"
                                              ValueChanged="@(_ => ToggleManualCartAsync(item.Id))"
                                              Color="Color.Primary" />
                             </td>
@@ -243,10 +243,10 @@ else if (_list is not null)
             <tbody>
                 @foreach (var line in InCartLines)
                 {
-                    <tr style="opacity: 0.6;">
+                    <tr @key="line.IngredientId" style="opacity: 0.6;">
                         <td>
                             <MudCheckBox T="bool"
-                                         Value="true"
+                                         Value="line.IsInCart"
                                          ValueChanged="@(_ => ToggleGeneratedCartAsync(line.IngredientId))"
                                          Color="Color.Primary" />
                         </td>
@@ -258,10 +258,10 @@ else if (_list is not null)
                 }
                 @foreach (var item in InCartManual)
                 {
-                    <tr style="opacity: 0.6;">
+                    <tr @key="item.Id" style="opacity: 0.6;">
                         <td>
                             <MudCheckBox T="bool"
-                                         Value="true"
+                                         Value="item.IsInCart"
                                          ValueChanged="@(_ => ToggleManualCartAsync(item.Id))"
                                          Color="Color.Primary" />
                         </td>
