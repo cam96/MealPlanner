@@ -3,6 +3,7 @@ using System;
 using MealPlanner.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MealPlanner.Data.Migrations
 {
     [DbContext(typeof(MealPlannerDbContext))]
-    partial class MealPlannerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260806212508_AddShoppingCartEntities")]
+    partial class AddShoppingCartEntities
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
@@ -195,9 +198,6 @@ namespace MealPlanner.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<int?>("IngredientId")
-                        .HasColumnType("INTEGER");
-
                     b.Property<bool>("IsInCart")
                         .HasColumnType("INTEGER");
 
@@ -220,8 +220,6 @@ namespace MealPlanner.Data.Migrations
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("IngredientId");
 
                     b.HasIndex("Year", "Month");
 
@@ -518,16 +516,6 @@ namespace MealPlanner.Data.Migrations
                     b.Navigation("Ingredient");
 
                     b.Navigation("Store");
-                });
-
-            modelBuilder.Entity("MealPlanner.Domain.Entities.ManualShoppingItem", b =>
-                {
-                    b.HasOne("MealPlanner.Domain.Entities.Ingredient", "Ingredient")
-                        .WithMany()
-                        .HasForeignKey("IngredientId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Ingredient");
                 });
 
             modelBuilder.Entity("MealPlanner.Domain.Entities.MealCombo", b =>

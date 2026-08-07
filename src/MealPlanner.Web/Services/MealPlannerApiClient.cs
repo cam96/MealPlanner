@@ -609,6 +609,104 @@ public sealed class MealPlannerApiClient(HttpClient httpClient)
         await httpClient.GetFromJsonAsync<ShoppingListDto>(
             $"/api/plans/{year}/{month}/shopping-list", JsonOptions, cancellationToken);
 
+    /// <summary>Adds a manual item to the shopping list for a month.</summary>
+    /// <param name="year">The calendar year.</param>
+    /// <param name="month">The calendar month (1-12).</param>
+    /// <param name="request">The item to add.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The created manual item.</returns>
+    public async Task<ManualShoppingItemDto?> AddManualShoppingItemAsync(
+        int year,
+        int month,
+        AddManualShoppingItemRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsJsonAsync(
+            $"/api/plans/{year}/{month}/shopping-list/manual-items", request, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ManualShoppingItemDto>(JsonOptions, cancellationToken);
+    }
+
+    /// <summary>Updates a manual item on the shopping list.</summary>
+    /// <param name="year">The calendar year.</param>
+    /// <param name="month">The calendar month (1-12).</param>
+    /// <param name="id">The manual item identifier.</param>
+    /// <param name="request">The updated item details.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    public async Task UpdateManualShoppingItemAsync(
+        int year,
+        int month,
+        int id,
+        AddManualShoppingItemRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PutAsJsonAsync(
+            $"/api/plans/{year}/{month}/shopping-list/manual-items/{id}", request, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Deletes a manual item from the shopping list.</summary>
+    /// <param name="year">The calendar year.</param>
+    /// <param name="month">The calendar month (1-12).</param>
+    /// <param name="id">The manual item identifier.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    public async Task DeleteManualShoppingItemAsync(
+        int year,
+        int month,
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.DeleteAsync(
+            $"/api/plans/{year}/{month}/shopping-list/manual-items/{id}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Toggles the cart status of a manual shopping list item.</summary>
+    /// <param name="year">The calendar year.</param>
+    /// <param name="month">The calendar month (1-12).</param>
+    /// <param name="id">The manual item identifier.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    public async Task ToggleManualItemCartAsync(
+        int year,
+        int month,
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PutAsync(
+            $"/api/plans/{year}/{month}/shopping-list/manual-items/{id}/cart", null, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Toggles the cart status of a generated (meal-plan-derived) shopping list item.</summary>
+    /// <param name="year">The calendar year.</param>
+    /// <param name="month">The calendar month (1-12).</param>
+    /// <param name="ingredientId">The ingredient identifier.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    public async Task ToggleGeneratedItemCartAsync(
+        int year,
+        int month,
+        int ingredientId,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PutAsync(
+            $"/api/plans/{year}/{month}/shopping-list/items/{ingredientId}/cart", null, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Clears all items currently in the cart for a month's shopping list.</summary>
+    /// <param name="year">The calendar year.</param>
+    /// <param name="month">The calendar month (1-12).</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    public async Task ClearShoppingCartAsync(
+        int year,
+        int month,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.DeleteAsync(
+            $"/api/plans/{year}/{month}/shopping-list/cart", cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
     /// <summary>Gets the household's application settings.</summary>
     /// <param name="cancellationToken">A token to cancel the request.</param>
     /// <returns>The current settings.</returns>

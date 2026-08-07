@@ -48,6 +48,12 @@ public class MealPlannerDbContext(DbContextOptions<MealPlannerDbContext> options
     /// <summary>Gets the application settings (key/value pairs).</summary>
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
 
+    /// <summary>Gets the manually added shopping list items.</summary>
+    public DbSet<ManualShoppingItem> ManualShoppingItems => Set<ManualShoppingItem>();
+
+    /// <summary>Gets the cart entries for generated (meal-plan-derived) shopping list items.</summary>
+    public DbSet<GeneratedItemCartEntry> GeneratedItemCartEntries => Set<GeneratedItemCartEntry>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -115,6 +115,11 @@ strings over HTTP.
   - **Bulk** — a single package substantially exceeds what you need.
   - **Shared** — the ingredient is used across more than one recipe.
   - Estimated or unpriced costs are marked with an asterisk.
+- **Manual items** — users can add free-text items to the shopping list (e.g. cleaning supplies,
+  snacks) with optional quantity and unit, independent of any meal plan.
+- **Cart check-off** — every item (generated or manual) has a checkbox; checking it moves the
+  item to an **"In the Cart"** section with struck-through styling. A **Clear Cart** button
+  removes all carted items at once (manual items are deleted; generated items are un-carted).
 - **Budget** (managed under `/settings`) — set a **monthly grocery budget**; the shopping list shows
   the estimated total against it with an over/under indicator.
 
@@ -150,7 +155,7 @@ strings over HTTP.
 | Pantry | `GET/POST /api/pantry`, `GET/PUT/DELETE /api/pantry/{id}` |
 | Planner | `GET /api/plans/{year}/{month}`, `PUT /api/plans/days/{dayId}`, `POST /api/plans/days/{dayId}/meals`, `PUT/DELETE /api/plans/meals/{mealId}` |
 | Combos | `GET /api/combos/board`, `GET/POST /api/combos`, `PUT/DELETE /api/combos/{id}` |
-| Shopping | `GET /api/plans/{year}/{month}/shopping-list` |
+| Shopping | `GET /api/plans/{year}/{month}/shopping-list`, `POST/DELETE .../manual-items`, `PUT .../manual-items/{id}/cart`, `PUT .../items/{ingredientId}/cart`, `DELETE .../cart` |
 | Settings | `GET/PUT /api/settings` |
 | Dashboard | `GET /api/plans/{year}/{month}/dashboard` |
 | Canadian Nutrient File | `GET /api/cnf/status`, `GET /api/cnf/foods?query=`, `GET /api/cnf/foods/{foodCode}` |

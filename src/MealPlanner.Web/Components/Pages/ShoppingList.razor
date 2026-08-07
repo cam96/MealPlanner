@@ -1,24 +1,20 @@
 @page "/shopping-list"
 @using System.Globalization
-@using MealPlanner.Contracts
+@using MealPlanner.Web.Components.Dialogs
 @inject MealPlannerApiClient Api
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <PageTitle>Shopping list - MealPlanner</PageTitle>
 
-<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
-    <MudText Typo="Typo.h4">Shopping list</MudText>
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4" Wrap="Wrap.Wrap">
+    <MudText Typo="Typo.h4" Class="d-none d-sm-block">Shopping list</MudText>
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
         <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" OnClick="PreviousMonthAsync" />
-        <MudText Typo="Typo.h6" Style="min-width: 180px; text-align: center;">@MonthLabel</MudText>
+        <MudText Typo="Typo.h6" Style="min-width: 140px; text-align: center;">@MonthLabel</MudText>
         <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" OnClick="NextMonthAsync" />
     </MudStack>
 </MudStack>
-
-<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
-    Combined from the month's planned meals, minus what's already in your pantry and freezer. Costs
-    use each ingredient's preferred store; estimated costs are marked with an asterisk.
-</MudText>
 
 @if (_loading)
 {
@@ -26,17 +22,18 @@
 }
 else if (_list is not null)
 {
-    <MudPaper Class="pa-4 mb-4" Elevation="1">
+    @* Budget summary *@
+    <MudPaper Class="pa-3 mb-3" Elevation="1">
         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
             <MudStack Spacing="0">
-                <MudText Typo="Typo.subtitle1">Estimated total</MudText>
-                <MudText Typo="Typo.h5">
+                <MudText Typo="Typo.caption">Estimated total</MudText>
+                <MudText Typo="Typo.h6">
                     @_list.EstimatedTotal.ToString("C", Culture)@(_list.IsEstimated ? "*" : string.Empty)
                 </MudText>
             </MudStack>
             <MudStack Spacing="0" AlignItems="AlignItems.End">
-                <MudText Typo="Typo.subtitle1">Monthly budget</MudText>
-                <MudText Typo="Typo.h6">@_list.MonthlyBudget.ToString("C", Culture)</MudText>
+                <MudText Typo="Typo.caption">Budget</MudText>
+                <MudText Typo="Typo.body1">@_list.MonthlyBudget.ToString("C", Culture)</MudText>
             </MudStack>
         </MudStack>
 
@@ -44,92 +41,383 @@ else if (_list is not null)
         {
             <MudProgressLinear Value="@BudgetProgress"
                                Color="@(_list.IsOverBudget ? Color.Error : Color.Success)"
-                               Class="my-3"
-                               Size="Size.Large" />
-            <MudText Typo="Typo.body2" Class="@(_list.IsOverBudget ? "mud-error-text" : "mud-text-secondary")">
+                               Class="my-2"
+                               Size="Size.Medium" />
+            <MudText Typo="Typo.caption" Class="@(_list.IsOverBudget ? "mud-error-text" : "mud-text-secondary")">
                 @if (_list.IsOverBudget)
                 {
-                    <text>Over budget by @((-_list.RemainingBudget).ToString("C", Culture)).</text>
+                    <text>Over by @((-_list.RemainingBudget).ToString("C", Culture))</text>
                 }
                 else
                 {
-                    <text>@_list.RemainingBudget.ToString("C", Culture) remaining.</text>
+                    <text>@_list.RemainingBudget.ToString("C", Culture) remaining</text>
                 }
             </MudText>
         }
     </MudPaper>
 
-    @if (_list.Lines.Count == 0)
+    @* To Buy section *@
+    @if (ToBuyLines.Count == 0 && ToBuyManual.Count == 0)
     {
-        <MudAlert Severity="Severity.Info">
-            Nothing to buy for this month yet. Plan some meals, or your pantry already covers everything.
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+            Nothing left to buy! Plan some meals or add items manually.
         </MudAlert>
     }
     else
     {
-        @foreach (var group in _list.Lines.GroupBy(l => l.StoreName ?? "Unpriced"))
+        @* Generated items — mobile card list *@
+        <div class="d-block d-md-none">
+            @foreach (var group in ToBuyLines.GroupBy(l => l.StoreName ?? "Unpriced"))
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-3 mb-1 mud-text-secondary">@group.Key</MudText>
+                @foreach (var line in group)
+                {
+                    <MudPaper Class="pa-2 mb-1" Elevation="0" Outlined="true" @key="line.IngredientId">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <MudCheckBox T="bool"
+                                         Value="line.IsInCart"
+                                         ValueChanged="@(_ => ToggleGeneratedCartAsync(line.IngredientId))"
+                                         Color="Color.Primary"
+                                         Dense="true" />
+                            <MudStack Spacing="0" Style="flex: 1; min-width: 0;">
+                                <MudText Typo="Typo.body2" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    @line.IngredientName
+                                </MudText>
+                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        @line.ToBuyQuantity.ToString("0.#") @UnitLabel(line.Unit) · @line.EstimatedCost.ToString("C", Culture)@(line.IsCostEstimated ? "*" : "")
+                                    </MudText>
+                                    @if (line.IsDeal)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="pa-0" Style="height:18px;font-size:0.65rem;">Deal</MudChip>
+                                    }
+                                </MudStack>
+                            </MudStack>
+                            <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
+                                           Size="Size.Small"
+                                           OnClick="@(() => ShowPricesAsync(line.IngredientId, line.IngredientName))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.AddCard"
+                                           Size="Size.Small"
+                                           OnClick="@(() => RecordPriceForIngredientAsync(line.IngredientId, line.IngredientName))" />
+                        </MudStack>
+                    </MudPaper>
+                }
+            }
+        </div>
+
+        @* Generated items — desktop table *@
+        <div class="d-none d-md-block">
+            @foreach (var group in ToBuyLines.GroupBy(l => l.StoreName ?? "Unpriced"))
+            {
+                <MudText Typo="Typo.h6" Class="mt-4 mb-2">@group.Key</MudText>
+                <MudSimpleTable Hover="true" Dense="true" Elevation="1">
+                    <thead>
+                        <tr>
+                            <th style="width: 48px;"></th>
+                            <th>Ingredient</th>
+                            <th style="text-align:right;">To buy</th>
+                            <th style="text-align:right;">Packages</th>
+                            <th style="text-align:right;">Cost</th>
+                            <th>Flags</th>
+                            <th>Price</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in group)
+                        {
+                            <tr @key="line.IngredientId">
+                                <td>
+                                    <MudCheckBox T="bool"
+                                                 Value="line.IsInCart"
+                                                 ValueChanged="@(_ => ToggleGeneratedCartAsync(line.IngredientId))"
+                                                 Color="Color.Primary" />
+                                </td>
+                                <td>@line.IngredientName</td>
+                                <td style="text-align:right;">
+                                    @line.ToBuyQuantity.ToString("0.#") @UnitLabel(line.Unit)
+                                    @if (line.PantryQuantity > 0)
+                                    {
+                                        <MudTooltip Text="@($"{line.PantryQuantity:0.#} {UnitLabel(line.Unit)} already on hand")">
+                                            <MudIcon Icon="@Icons.Material.Filled.Kitchen" Size="Size.Small" />
+                                        </MudTooltip>
+                                    }
+                                </td>
+                                <td style="text-align:right;">@(line.PackagesToBuy > 0 ? line.PackagesToBuy.ToString() : "-")</td>
+                                <td style="text-align:right;">
+                                    @line.EstimatedCost.ToString("C", Culture)@(line.IsCostEstimated ? "*" : string.Empty)
+                                </td>
+                                <td>
+                                    @if (line.IsDeal)
+                                    {
+                                        <MudTooltip Text="@($"{line.PercentBelowAverage:0}% below the historical average")">
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ma-1">Deal</MudChip>
+                                        </MudTooltip>
+                                    }
+                                    @if (line.IsBulk)
+                                    {
+                                        <MudTooltip Text="A single package covers well over what you need">
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ma-1">Bulk</MudChip>
+                                        </MudTooltip>
+                                    }
+                                    @if (line.IsShared)
+                                    {
+                                        <MudTooltip Text="Used across more than one recipe">
+                                            <MudChip T="string" Size="Size.Small" Class="ma-1">Shared</MudChip>
+                                        </MudTooltip>
+                                    }
+                                </td>
+                                <td>
+                                    <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => ShowPricesAsync(line.IngredientId, line.IngredientName))" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.AddCard"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => RecordPriceForIngredientAsync(line.IngredientId, line.IngredientName))" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+        </div>
+
+        @* Manual items *@
+        @if (ToBuyManual.Count > 0)
         {
-            <MudText Typo="Typo.h6" Class="mt-4 mb-2">@group.Key</MudText>
+            <MudText Typo="Typo.subtitle2" Class="mt-4 mb-1 d-block d-md-none mud-text-secondary">
+                <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Small" Class="mr-1" />
+                On the shelf
+            </MudText>
+            <MudText Typo="Typo.h6" Class="mt-4 mb-2 d-none d-md-block">
+                <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Small" Class="mr-1" />
+                On the shelf
+            </MudText>
+
+            @* Mobile *@
+            <div class="d-block d-md-none">
+                @foreach (var item in ToBuyManual)
+                {
+                    <MudPaper Class="pa-2 mb-1" Elevation="0" Outlined="true" @key="item.Id">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <MudCheckBox T="bool"
+                                         Value="item.IsInCart"
+                                         ValueChanged="@(_ => ToggleManualCartAsync(item.Id))"
+                                         Color="Color.Primary"
+                                         Dense="true" />
+                            <MudStack Spacing="0" Style="flex: 1; min-width: 0;">
+                                <MudText Typo="Typo.body2" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    @item.Name
+                                </MudText>
+                                @if (item.Quantity.HasValue)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        @item.Quantity.Value.ToString("0.#")@(item.Unit.HasValue ? $" {UnitLabel(item.Unit.Value)}" : "")
+                                    </MudText>
+                                }
+                            </MudStack>
+                            @if (item.IngredientId.HasValue)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
+                                               Size="Size.Small"
+                                               OnClick="@(() => ShowPricesAsync(item.IngredientId.Value, item.Name))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.AddCard"
+                                               Size="Size.Small"
+                                               OnClick="@(() => RecordPriceForIngredientAsync(item.IngredientId.Value, item.Name))" />
+                            }
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                           Size="Size.Small"
+                                           OnClick="@(() => EditManualItemAsync(item))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                           Size="Size.Small"
+                                           OnClick="@(() => DeleteManualItemAsync(item.Id))" />
+                        </MudStack>
+                    </MudPaper>
+                }
+            </div>
+
+            @* Desktop *@
+            <div class="d-none d-md-block">
+                <MudSimpleTable Hover="true" Dense="true" Elevation="1">
+                    <thead>
+                        <tr>
+                            <th style="width: 48px;"></th>
+                            <th>Item</th>
+                            <th style="text-align:right;">Quantity</th>
+                            <th>Price</th>
+                            <th style="width: 100px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in ToBuyManual)
+                        {
+                            <tr @key="item.Id">
+                                <td>
+                                    <MudCheckBox T="bool"
+                                                 Value="item.IsInCart"
+                                                 ValueChanged="@(_ => ToggleManualCartAsync(item.Id))"
+                                                 Color="Color.Primary" />
+                                </td>
+                                <td>@item.Name</td>
+                                <td style="text-align:right;">
+                                    @if (item.Quantity.HasValue)
+                                    {
+                                        @item.Quantity.Value.ToString("0.#")
+                                        @if (item.Unit.HasValue)
+                                        {
+                                            @(" ")@UnitLabel(item.Unit.Value)
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <text>-</text>
+                                    }
+                                </td>
+                                <td>
+                                    @if (item.IngredientId.HasValue)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.AttachMoney"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => ShowPricesAsync(item.IngredientId.Value, item.Name))" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.AddCard"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => RecordPriceForIngredientAsync(item.IngredientId.Value, item.Name))" />
+                                    }
+                                </td>
+                                <td>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => EditManualItemAsync(item))" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => DeleteManualItemAsync(item.Id))" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </div>
+        }
+    }
+
+    @* In the Cart section *@
+    @if (HasCartItems)
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mt-5 mb-2">
+            <MudText Typo="Typo.h6">
+                <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Size="Size.Small" Class="mr-1" />
+                In the cart
+            </MudText>
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Error"
+                       Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.RemoveShoppingCart"
+                       OnClick="ClearCartAsync">
+                Clear
+            </MudButton>
+        </MudStack>
+
+        @* Mobile cart *@
+        <div class="d-block d-md-none">
+            @foreach (var line in InCartLines)
+            {
+                <MudPaper Class="pa-2 mb-1" Elevation="0" Outlined="true" Style="opacity: 0.6;" @key="line.IngredientId">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudCheckBox T="bool"
+                                     Value="line.IsInCart"
+                                     ValueChanged="@(_ => ToggleGeneratedCartAsync(line.IngredientId))"
+                                     Color="Color.Primary"
+                                     Dense="true" />
+                        <MudText Typo="Typo.body2" Style="flex: 1;"><s>@line.IngredientName</s></MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            @line.ToBuyQuantity.ToString("0.#") @UnitLabel(line.Unit)
+                        </MudText>
+                    </MudStack>
+                </MudPaper>
+            }
+            @foreach (var item in InCartManual)
+            {
+                <MudPaper Class="pa-2 mb-1" Elevation="0" Outlined="true" Style="opacity: 0.6;" @key="item.Id">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudCheckBox T="bool"
+                                     Value="item.IsInCart"
+                                     ValueChanged="@(_ => ToggleManualCartAsync(item.Id))"
+                                     Color="Color.Primary"
+                                     Dense="true" />
+                        <MudText Typo="Typo.body2" Style="flex: 1;"><s>@item.Name</s></MudText>
+                    </MudStack>
+                </MudPaper>
+            }
+        </div>
+
+        @* Desktop cart *@
+        <div class="d-none d-md-block">
             <MudSimpleTable Hover="true" Dense="true" Elevation="1">
                 <thead>
                     <tr>
-                        <th>Ingredient</th>
-                        <th style="text-align:right;">To buy</th>
-                        <th style="text-align:right;">Packages</th>
-                        <th style="text-align:right;">Cost</th>
-                        <th>Flags</th>
+                        <th style="width: 48px;"></th>
+                        <th>Item</th>
+                        <th style="text-align:right;">Quantity</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var line in group)
+                    @foreach (var line in InCartLines)
                     {
-                        <tr>
-                            <td>@line.IngredientName</td>
+                        <tr @key="line.IngredientId" style="opacity: 0.6;">
+                            <td>
+                                <MudCheckBox T="bool"
+                                             Value="line.IsInCart"
+                                             ValueChanged="@(_ => ToggleGeneratedCartAsync(line.IngredientId))"
+                                             Color="Color.Primary" />
+                            </td>
+                            <td><s>@line.IngredientName</s></td>
                             <td style="text-align:right;">
                                 @line.ToBuyQuantity.ToString("0.#") @UnitLabel(line.Unit)
-                                @if (line.PantryQuantity > 0)
-                                {
-                                    <MudTooltip Text="@($"{line.PantryQuantity:0.#} {UnitLabel(line.Unit)} already on hand")">
-                                        <MudIcon Icon="@Icons.Material.Filled.Kitchen" Size="Size.Small" />
-                                    </MudTooltip>
-                                }
                             </td>
-                            <td style="text-align:right;">@(line.PackagesToBuy > 0 ? line.PackagesToBuy.ToString() : "-")</td>
-                            <td style="text-align:right;">
-                                @line.EstimatedCost.ToString("C", Culture)@(line.IsCostEstimated ? "*" : string.Empty)
-                            </td>
+                        </tr>
+                    }
+                    @foreach (var item in InCartManual)
+                    {
+                        <tr @key="item.Id" style="opacity: 0.6;">
                             <td>
-                                @if (line.IsDeal)
+                                <MudCheckBox T="bool"
+                                             Value="item.IsInCart"
+                                             ValueChanged="@(_ => ToggleManualCartAsync(item.Id))"
+                                             Color="Color.Primary" />
+                            </td>
+                            <td><s>@item.Name</s></td>
+                            <td style="text-align:right;">
+                                @if (item.Quantity.HasValue)
                                 {
-                                    <MudTooltip Text="@($"{line.PercentBelowAverage:0}% below the historical average")">
-                                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ma-1">Deal</MudChip>
-                                    </MudTooltip>
+                                    @item.Quantity.Value.ToString("0.#")
+                                    @if (item.Unit.HasValue)
+                                    {
+                                        @(" ")@UnitLabel(item.Unit.Value)
+                                    }
                                 }
-                                @if (line.IsBulk)
+                                else
                                 {
-                                    <MudTooltip Text="A single package covers well over what you need">
-                                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ma-1">Bulk</MudChip>
-                                    </MudTooltip>
-                                }
-                                @if (line.IsShared)
-                                {
-                                    <MudTooltip Text="Used across more than one recipe">
-                                        <MudChip T="string" Size="Size.Small" Class="ma-1">Shared</MudChip>
-                                    </MudTooltip>
+                                    <text>-</text>
                                 }
                             </td>
                         </tr>
                     }
                 </tbody>
             </MudSimpleTable>
-        }
+        </div>
     }
 }
+
+@* FAB — add shopping list item *@
+<MudFab StartIcon="@Icons.Material.Filled.Add"
+        Color="Color.Primary"
+        Class="fab-bottom-right"
+        OnClick="OpenAddItemDialogAsync" />
 
 @code {
     private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("en-CA");
 
     private ShoppingListDto? _list;
+    private IReadOnlyList<StoreDto> _stores = [];
     private bool _loading = true;
     private int _year = DateTime.Today.Year;
     private int _month = DateTime.Today.Month;
@@ -142,7 +430,25 @@ else if (_list is not null)
             ? 0
             : Math.Min(100, (double)(_list.EstimatedTotal / _list.MonthlyBudget) * 100);
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private List<ShoppingListLineDto> ToBuyLines =>
+        _list?.Lines.Where(l => !l.IsInCart).ToList() ?? [];
+
+    private List<ManualShoppingItemDto> ToBuyManual =>
+        _list?.ManualItems.Where(m => !m.IsInCart).ToList() ?? [];
+
+    private List<ShoppingListLineDto> InCartLines =>
+        _list?.Lines.Where(l => l.IsInCart).ToList() ?? [];
+
+    private List<ManualShoppingItemDto> InCartManual =>
+        _list?.ManualItems.Where(m => m.IsInCart).ToList() ?? [];
+
+    private bool HasCartItems => InCartLines.Count > 0 || InCartManual.Count > 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _stores = await Api.GetStoresAsync();
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
@@ -175,6 +481,178 @@ else if (_list is not null)
         _year = next.Year;
         _month = next.Month;
         await LoadAsync();
+    }
+
+    private async Task OpenAddItemDialogAsync()
+    {
+        var options = DialogHelper.FormDialog();
+        var dialog = await DialogService.ShowAsync<AddShoppingItemDialog>("Add item", options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not AddManualShoppingItemRequest request)
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.AddManualShoppingItemAsync(_year, _month, request);
+            Snackbar.Add("Item added.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not add the item.", Severity.Error);
+        }
+    }
+
+    private async Task DeleteManualItemAsync(int id)
+    {
+        try
+        {
+            await Api.DeleteManualShoppingItemAsync(_year, _month, id);
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not delete the item.", Severity.Error);
+        }
+    }
+
+    private async Task EditManualItemAsync(ManualShoppingItemDto item)
+    {
+        var parameters = new DialogParameters<AddShoppingItemDialog>
+        {
+            { x => x.Existing, item },
+        };
+        var options = DialogHelper.FormDialog();
+        var dialog = await DialogService.ShowAsync<AddShoppingItemDialog>("Edit item", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not AddManualShoppingItemRequest request)
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.UpdateManualShoppingItemAsync(_year, _month, item.Id, request);
+            Snackbar.Add("Item updated.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not update the item.", Severity.Error);
+        }
+    }
+
+    private async Task ToggleGeneratedCartAsync(int ingredientId)
+    {
+        try
+        {
+            await Api.ToggleGeneratedItemCartAsync(_year, _month, ingredientId);
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not update the cart.", Severity.Error);
+        }
+    }
+
+    private async Task ToggleManualCartAsync(int id)
+    {
+        try
+        {
+            await Api.ToggleManualItemCartAsync(_year, _month, id);
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not update the cart.", Severity.Error);
+        }
+    }
+
+    private async Task ClearCartAsync()
+    {
+        try
+        {
+            await Api.ClearShoppingCartAsync(_year, _month);
+            await LoadAsync();
+            Snackbar.Add("Cart cleared.", Severity.Success);
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not clear the cart.", Severity.Error);
+        }
+    }
+
+    private async Task ShowPricesAsync(int ingredientId, string ingredientName)
+    {
+        IReadOnlyList<IngredientPriceDto> prices;
+        try
+        {
+            prices = await Api.GetPricesAsync(ingredientId);
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not load prices.", Severity.Error);
+            return;
+        }
+
+        if (prices.Count == 0)
+        {
+            Snackbar.Add($"No prices recorded for {ingredientName}.", Severity.Info);
+            return;
+        }
+
+        var parameters = new DialogParameters<PriceListDialog>
+        {
+            { x => x.IngredientName, ingredientName },
+            { x => x.Prices, prices },
+        };
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseOnEscapeKey = true,
+        };
+        await DialogService.ShowAsync<PriceListDialog>($"Prices — {ingredientName}", parameters, options);
+    }
+
+    private async Task RecordPriceForIngredientAsync(int ingredientId, string ingredientName)
+    {
+        if (_stores.Count == 0)
+        {
+            Snackbar.Add("Add a store under Settings before recording prices.", Severity.Info);
+            return;
+        }
+
+        var parameters = new DialogParameters<PriceDialog>
+        {
+            { x => x.Existing, null },
+            { x => x.Stores, _stores },
+            { x => x.ShowIngredientPicker, false },
+            { x => x.IngredientId, ingredientId },
+        };
+        var options = DialogHelper.FormDialog();
+        var dialog = await DialogService.ShowAsync<PriceDialog>($"Record price — {ingredientName}", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not SaveIngredientPriceRequest request)
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.CreatePriceAsync(ingredientId, request);
+            Snackbar.Add("Price recorded.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not save the price.", Severity.Error);
+        }
     }
 
     private static string UnitLabel(MeasurementUnit unit) => unit switch
