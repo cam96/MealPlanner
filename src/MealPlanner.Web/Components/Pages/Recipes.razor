@@ -1,20 +1,12 @@
 @page "/recipes"
+@using MealPlanner.Web.Components.Dialogs
 @inject MealPlannerApiClient Api
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
-@inject NavigationManager Navigation
 
 <PageTitle>Recipes - MealPlanner</PageTitle>
 
-<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
-    <MudText Typo="Typo.h4">Recipes</MudText>
-    <MudButton Variant="Variant.Filled"
-               Color="Color.Primary"
-               StartIcon="@Icons.Material.Filled.Add"
-               OnClick="@(() => Navigation.NavigateTo("/recipes/new"))">
-        Add recipe
-    </MudButton>
-</MudStack>
+<MudText Typo="Typo.h5" Class="mb-2 d-none d-sm-block">Recipes</MudText>
 
 <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
     Nutrition and cost are calculated per serving from ingredient prices. Estimated figures are flagged.
@@ -75,7 +67,7 @@
             <CellTemplate>
                 <MudIconButton Icon="@Icons.Material.Filled.Edit"
                                Size="Size.Small"
-                               OnClick="@(() => Navigation.NavigateTo($"/recipes/{context.Item.Id}"))" />
+                               OnClick="@(() => OpenEditorAsync(context.Item.Id))" />
                 <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                Size="Size.Small"
                                Color="Color.Error"
@@ -94,6 +86,12 @@
         }
     </NoRecordsContent>
 </MudDataGrid>
+
+@* FAB — always reachable for adding *@
+<MudFab StartIcon="@Icons.Material.Filled.Add"
+        Color="Color.Primary"
+        Class="fab-bottom-right"
+        OnClick="@(() => OpenEditorAsync(null))" />
 
 @code {
     private IReadOnlyList<RecipeSummaryDto> _recipes = [];
@@ -116,6 +114,51 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task OpenEditorAsync(int? existingId)
+    {
+        RecipeDto? existing = null;
+        if (existingId is { } id)
+        {
+            existing = await Api.GetRecipeAsync(id);
+            if (existing is null)
+            {
+                Snackbar.Add("Recipe not found.", Severity.Error);
+                return;
+            }
+        }
+
+        var parameters = new DialogParameters<RecipeDialog> { { x => x.Existing, existing } };
+        var title = existing is null ? "Add recipe" : "Edit recipe";
+        var options = DialogHelper.FormDialog();
+        var dialog = await DialogService.ShowAsync<RecipeDialog>(title, parameters, options);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled || result.Data is not SaveRecipeRequest request)
+        {
+            return;
+        }
+
+        try
+        {
+            if (existing is null)
+            {
+                await Api.CreateRecipeAsync(request);
+                Snackbar.Add($"Added {request.Name}.", Severity.Success);
+            }
+            else
+            {
+                await Api.UpdateRecipeAsync(existing.Id, request);
+                Snackbar.Add($"Updated {request.Name}.", Severity.Success);
+            }
+
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not save the recipe. Is the API running?", Severity.Error);
         }
     }
 
