@@ -189,14 +189,14 @@ public static class ShoppingEndpoints
 
     /// <summary>
     /// Computes the estimated cost for a manual shopping item using its linked ingredient's
-    /// latest or preferred-store price.
+    /// latest or preferred-store price. When the item has no quantity or the unit cannot be
+    /// converted, falls back to one package at the recorded price.
     /// </summary>
     private static (decimal Cost, bool IsCostEstimated) ComputeManualItemCost(
         ManualShoppingItem item,
         Dictionary<int, List<IngredientPrice>> pricesByIngredient)
     {
-        if (!item.IngredientId.HasValue || !item.Quantity.HasValue || item.Quantity.Value <= 0
-            || item.Ingredient is null || item.Unit is null)
+        if (!item.IngredientId.HasValue || item.Ingredient is null)
         {
             return (0m, true);
         }
@@ -213,19 +213,27 @@ public static class ShoppingEndpoints
             return (0m, true);
         }
 
+        // When no quantity/unit is specified, assume the user needs one package.
+        if (!item.Quantity.HasValue || item.Quantity.Value <= 0 || item.Unit is null)
+        {
+            return (chosen.Price, chosen.IsEstimated);
+        }
+
         var ingredient = item.Ingredient;
         if (!UnitConverter.TryToBaseUnits(
                 ingredient.BaseUnit, ingredient.ServingWeightG, item.Quantity.Value, item.Unit.Value, out var itemBase)
             || itemBase <= 0)
         {
-            return (0m, true);
+            // Unit conversion failed — fall back to one package.
+            return (chosen.Price, true);
         }
 
         if (!UnitConverter.TryToBaseUnits(
                 ingredient.BaseUnit, ingredient.ServingWeightG, chosen.PackageQuantity, chosen.PackageUnit, out var packageBase)
             || packageBase <= 0)
         {
-            return (0m, true);
+            // Package unit conversion failed — fall back to one package.
+            return (chosen.Price, true);
         }
 
         var packages = Math.Max(1, (int)Math.Ceiling(itemBase / packageBase));
