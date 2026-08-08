@@ -165,6 +165,20 @@ sequenceDiagram
 | Signing key | Shared secret | Passed to both services via Aspire parameters |
 | Token lifetime | 1 hour | Cached in the Blazor circuit; refreshed automatically |
 
+### JWT issuer and audience
+
+The JWT contains two identity claims that the API validates on every request:
+
+- **Issuer (`iss`: `MealPlanner.Web`)** — identifies who created the token. The API only accepts
+  tokens issued by the Web service. This prevents tokens from untrusted sources being accepted.
+- **Audience (`aud`: `MealPlanner.Api`)** — identifies who the token is intended for. The API only
+  accepts tokens explicitly addressed to it. This prevents a token meant for a different service
+  from being replayed against the API.
+
+The Web stamps both claims when generating the token; the API rejects the token if either value
+doesn't match. In a single-API deployment this is defense-in-depth — it becomes critical if a
+second service is ever added that shares the same signing key but should not share access.
+
 ### Anonymous endpoints
 
 - `/ping` — readiness probe (API)
