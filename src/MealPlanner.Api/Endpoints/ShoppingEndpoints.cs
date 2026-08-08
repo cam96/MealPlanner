@@ -3,7 +3,6 @@ using MealPlanner.Contracts.Shopping;
 using MealPlanner.Data;
 using MealPlanner.Domain.Entities;
 using MealPlanner.Domain.Nutrition;
-using MealPlanner.Domain.Shopping;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,8 +28,6 @@ public static class ShoppingEndpoints
         group.MapDelete("/manual-items/{id:int}", DeleteManualItemAsync);
         group.MapPut("/manual-items/{id:int}/cart", ToggleManualItemCartAsync);
 
-        group.MapPut("/items/{ingredientId:int}/cart", ToggleGeneratedItemCartAsync);
-
         group.MapDelete("/cart", ClearCartAsync);
 
         return app;
@@ -51,22 +48,6 @@ public static class ShoppingEndpoints
         }
 
         var budget = await SettingsEndpoints.GetMonthlyBudgetAsync(db, cancellationToken);
-
-        var plan = await db.MealPlans
-            .AsNoTracking()
-            .Include(p => p.Days)
-                .ThenInclude(d => d.Meals)
-                    .ThenInclude(m => m.Recipe!)
-                        .ThenInclude(r => r.Ingredients)
-                            .ThenInclude(ri => ri.Ingredient)
-            .FirstOrDefaultAsync(p => p.Year == year && p.Month == month, cancellationToken);
-
-        // Load cart entries for generated items.
-        var cartedIngredientIds = await db.GeneratedItemCartEntries
-            .AsNoTracking()
-            .Where(e => e.Year == year && e.Month == month)
-            .Select(e => e.IngredientId)
-            .ToHashSetAsync(cancellationToken);
 
         // Load manual items for this month with their linked ingredients.
         var manualEntities = await db.ManualShoppingItems
@@ -110,14 +91,14 @@ public static class ShoppingEndpoints
                     .ToList());
 
         // Compute costs for manual items and build DTOs.
-        var manualTotalCost = 0m;
-        var anyManualEstimated = false;
-        var manualItems = manualEntities
+        var totalCost = 0m;
+        var anyEstimated = false;
+        var items = manualEntities
             .Select(m =>
             {
                 var (cost, isCostEstimated) = ComputeManualItemCost(m, manualPricesByIngredient);
-                manualTotalCost += cost;
-                anyManualEstimated |= isCostEstimated;
+                totalCost += cost;
+                anyEstimated |= isCostEstimated;
 
                 var priceDtos = m.IngredientId.HasValue
                     && manualPriceDtosByIngredient.TryGetValue(m.IngredientId.Value, out var p)
@@ -128,61 +109,15 @@ public static class ShoppingEndpoints
             })
             .ToList();
 
-        if (plan is null)
-        {
-            var estimatedTotal = manualTotalCost;
-            var isEstimated = anyManualEstimated;
-            var empty = new ShoppingListDto(
-                year, month, [], manualItems, estimatedTotal, isEstimated,
-                budget, budget > 0 && estimatedTotal > budget, budget - estimatedTotal);
-            return TypedResults.Ok(empty);
-        }
-
-        var pantry = await db.PantryItems
-            .AsNoTracking()
-            .Include(p => p.Ingredient)
-            .ToListAsync(cancellationToken);
-
-        var allPrices = await db.IngredientPrices
-            .AsNoTracking()
-            .Include(p => p.Store)
-            .ToListAsync(cancellationToken);
-
-        var list = ShoppingListGenerator.Generate(plan, pantry, allPrices);
-
-        var lines = list.Lines
-            .Select(l => new ShoppingListLineDto(
-                l.IngredientId,
-                l.IngredientName,
-                l.Unit.ToContract(),
-                l.RequiredQuantity,
-                l.PantryQuantity,
-                l.ToBuyQuantity,
-                l.PreferredStoreId,
-                l.PreferredStoreName,
-                l.PackagesToBuy,
-                l.EstimatedCost,
-                l.IsCostEstimated,
-                l.IsSharedAcrossRecipes,
-                l.IsBulkPurchase,
-                l.IsDeal,
-                l.PercentBelowAverage,
-                cartedIngredientIds.Contains(l.IngredientId)))
-            .ToList();
-
-        var totalEstimated = list.EstimatedTotal + manualTotalCost;
-        var totalIsEstimated = list.IsEstimated || anyManualEstimated;
-
         var dto = new ShoppingListDto(
             year,
             month,
-            lines,
-            manualItems,
-            totalEstimated,
-            totalIsEstimated,
+            items,
+            totalCost,
+            anyEstimated,
             budget,
-            budget > 0 && totalEstimated > budget,
-            budget - totalEstimated);
+            budget > 0 && totalCost > budget,
+            budget - totalCost);
 
         return TypedResults.Ok(dto);
     }
@@ -405,49 +340,12 @@ public static class ShoppingEndpoints
         return TypedResults.Ok(item.ToDto());
     }
 
-    private static async Task<Ok> ToggleGeneratedItemCartAsync(
-        int year,
-        int month,
-        int ingredientId,
-        MealPlannerDbContext db,
-        CancellationToken cancellationToken)
-    {
-        var existing = await db.GeneratedItemCartEntries
-            .FirstOrDefaultAsync(
-                e => e.Year == year && e.Month == month && e.IngredientId == ingredientId,
-                cancellationToken);
-
-        if (existing is not null)
-        {
-            db.GeneratedItemCartEntries.Remove(existing);
-        }
-        else
-        {
-            db.GeneratedItemCartEntries.Add(new GeneratedItemCartEntry
-            {
-                Year = year,
-                Month = month,
-                IngredientId = ingredientId,
-                AddedToCartAt = DateTime.UtcNow,
-            });
-        }
-
-        await db.SaveChangesAsync(cancellationToken);
-
-        return TypedResults.Ok();
-    }
-
     private static async Task<NoContent> ClearCartAsync(
         int year,
         int month,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
-        // Remove all generated item cart entries for this month.
-        await db.GeneratedItemCartEntries
-            .Where(e => e.Year == year && e.Month == month)
-            .ExecuteDeleteAsync(cancellationToken);
-
         // Remove manual items that are in the cart (they've been purchased).
         await db.ManualShoppingItems
             .Where(m => m.Year == year && m.Month == month && m.IsInCart)
