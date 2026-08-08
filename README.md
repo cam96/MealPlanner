@@ -285,8 +285,11 @@ volumes are untouched:
 
 ```bash
 git pull                          # or re-copy the repo
-docker compose up -d --build
+VERSION=1.2.3 docker compose up -d --build   # versioned build
 ```
+
+The `VERSION` variable is baked into the published assemblies and displayed in the web UI (bottom of
+the sidebar). Omit it for a local dev build (`0.0.0-dev`).
 
 The `docker-compose.yml` bind-mounts `./data/cnf` into the API container automatically. If the
 folder is absent (CNF not yet downloaded), Docker skips the mount and CNF search is simply hidden
@@ -294,6 +297,38 @@ in the UI.
 
 > `aspire publish` can also generate an equivalent Compose project; the checked-in
 > [docker-compose.yml](docker-compose.yml) is the maintained home-deploy artifact.
+
+## Versioning & releases
+
+The application version flows from one source:
+
+1. **Default** — `Directory.Build.props` sets `<Version>0.0.0-dev</Version>` (shown in the web UI
+   sidebar for local/dev builds).
+2. **Deployment** — pass `VERSION=x.y.z` to `docker compose build` (or set it in the environment)
+   to bake a real version into both images.
+3. **GitHub Release** — pushing a tag like `v1.0.0` triggers the
+   [release workflow](.github/workflows/release.yml), which validates the build, runs tests, builds
+   both Docker images with the version baked in, and attaches them as compressed tarballs to the
+   GitHub Release. Tags containing a hyphen (e.g., `v1.0.0-alpha.1`) are marked as pre-releases.
+
+The Dockerfiles accept a `VERSION` build arg and pass it to `dotnet publish /p:Version=${VERSION}`.
+The web UI reads the assembly `InformationalVersion` at runtime and displays it at the bottom of the
+navigation drawer.
+
+### Deploy from a release
+
+Download the image tarballs from a [GitHub Release](https://github.com/cam96/MealPlanner/releases)
+and load them on the server:
+
+```bash
+gunzip mealplanner-api-1.0.0.tar.gz mealplanner-web-1.0.0.tar.gz
+docker load -i mealplanner-api-1.0.0.tar
+docker load -i mealplanner-web-1.0.0.tar
+docker compose up -d
+```
+
+Because the images are pre-built with the version already embedded, no source code or .NET SDK is
+needed on the server — just Docker.
 
 ## Data safety
 

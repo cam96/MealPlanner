@@ -1,4 +1,6 @@
-﻿<MudNavMenu>
+﻿@using System.Reflection
+
+<MudNavMenu>
     <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
     <MudNavLink Href="people" Icon="@Icons.Material.Filled.People">People &amp; Goals</MudNavLink>
     <MudNavLink Href="ingredients" Icon="@Icons.Material.Filled.Egg">Ingredients</MudNavLink>
@@ -10,4 +12,9 @@
     <MudNavLink Href="shopping-list" Icon="@Icons.Material.Filled.ShoppingCart">Shopping List</MudNavLink>
     <MudNavLink Href="settings" Icon="@Icons.Material.Filled.Settings">Settings</MudNavLink>
 </MudNavMenu>
+
+<MudSpacer />
+<MudText Typo="Typo.caption" Class="pa-4 mud-text-secondary" Style="position: absolute; bottom: 0;">
+    v@(Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown")
+</MudText>
 
