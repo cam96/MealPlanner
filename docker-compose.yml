@@ -16,17 +16,13 @@ services:
       # container's writable layer, so data survives rebuilds and updates.
       ConnectionStrings__mealplanner: Data Source=/data/mealplanner.db
       MealPlanner__BackupDirectory: /backups
-      # CNF nutrition search: point the API at the bind-mounted dataset.
+      # CNF nutrition search: point the API at the bundled dataset.
       MealPlanner__CnfDirectory: /data/cnf
       # Set to true on a fresh install to load representative demo data (off by default).
       MealPlanner__SeedDemoData: "false"
     volumes:
       - mealplanner-data:/data
       - mealplanner-backups:/backups
-      # Canadian Nutrient File CSVs (downloaded separately, read-only). Place the CSV files
-      # in data/cnf/ at the repository root; when the folder is absent the mount is skipped
-      # and CNF search is simply hidden in the UI.
-      - ./data/cnf:/data/cnf:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/ping"]
