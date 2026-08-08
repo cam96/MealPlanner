@@ -12,7 +12,7 @@
                              Value="_model.Ingredient"
                              ValueChanged="OnIngredientSelected"
                              SearchFunc="SearchIngredientsAsync"
-                             ToStringFunc="@(i => i?.Name ?? string.Empty)"
+                             ToStringFunc="@(i => i?.Name ?? _searchText)"
                              Text="@_searchText"
                              TextChanged="OnSearchTextChanged"
                              ResetValueOnEmptyText="true"
