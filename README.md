@@ -280,12 +280,24 @@ docker compose logs -f            # follow logs (add a service name to scope: ap
 docker compose down               # stop and remove containers (named volumes/data are kept)
 ```
 
+#### Update from source (building locally)
+
 To deploy a new version after pulling code changes, rebuild and recreate in place — the data
 volumes are untouched:
 
 ```bash
 git pull                          # or re-copy the repo
 VERSION=1.2.3 docker compose up -d --build   # versioned build
+```
+
+#### Update from pre-built images (recommended)
+
+If your deployment uses the pre-built GHCR images (see [Deploy from a release](#deploy-from-a-release)),
+pull the latest and replace the running containers:
+
+```bash
+docker compose pull               # pull the latest images from GHCR
+docker compose up -d              # recreate containers with the new images
 ```
 
 The `VERSION` variable is baked into the published assemblies and displayed in the web UI (bottom of
@@ -320,10 +332,12 @@ navigation drawer.
 
 ### Deploy from a release
 
-Images are published to **GitHub Container Registry** (GHCR) on every release. Pull and run directly:
+Images are published to **GitHub Container Registry** (GHCR) on every release. Pull the latest
+images and start the stack:
 
 ```bash
-docker compose up -d   # pulls ghcr.io/cam96/mealplanner-api:latest and mealplanner-web:latest
+docker compose pull               # pulls ghcr.io/cam96/mealplanner-api:latest and mealplanner-web:latest
+docker compose up -d              # starts containers from the pulled images
 ```
 
 To pin a specific version:
@@ -332,6 +346,26 @@ To pin a specific version:
 VERSION=1.0.0 docker compose pull
 docker compose up -d
 ```
+
+#### Update a running deployment to the latest release
+
+When a new release is published, pull the updated images and recreate the containers in place —
+existing data volumes are preserved:
+
+```bash
+docker compose pull               # fetches the newest :latest images from GHCR
+docker compose up -d              # recreates only containers whose image changed
+```
+
+This is zero-downtime for the data: named volumes (`mealplanner-data`, `mealplanner-backups`) are
+**not** removed. The API applies any pending EF Core migrations on startup (after backing up the
+database). If you want to force-recreate both containers even when the image hasn't changed:
+
+```bash
+docker compose up -d --force-recreate
+```
+
+#### Offline deployment from release tarballs
 
 Alternatively, download the image tarballs from a
 [GitHub Release](https://github.com/cam96/MealPlanner/releases) for offline deployment:
