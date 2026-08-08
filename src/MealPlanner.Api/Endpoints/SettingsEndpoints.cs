@@ -20,7 +20,7 @@ public static class SettingsEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/settings").WithTags("Settings");
+        var group = app.MapGroup("/api/settings").WithTags("Settings").RequireAuthorization();
 
         group.MapGet("/", GetAsync);
         group.MapPut("/", UpdateAsync);

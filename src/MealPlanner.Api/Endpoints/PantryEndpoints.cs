@@ -17,7 +17,7 @@ public static class PantryEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/pantry").WithTags("Pantry");
+        var group = app.MapGroup("/api/pantry").WithTags("Pantry").RequireAuthorization();
 
         group.MapGet("/", GetAllAsync);
         group.MapGet("/{id:int}", GetByIdAsync);

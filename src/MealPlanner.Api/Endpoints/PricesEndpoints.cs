@@ -17,14 +17,14 @@ public static class PricesEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/ingredients/{ingredientId:int}/prices").WithTags("Prices");
+        var group = app.MapGroup("/api/ingredients/{ingredientId:int}/prices").WithTags("Prices").RequireAuthorization();
 
         group.MapGet("/", GetAllAsync);
         group.MapPost("/", CreateAsync);
         group.MapPut("/{priceId:int}", UpdateAsync);
         group.MapDelete("/{priceId:int}", DeleteAsync);
 
-        var flat = app.MapGroup("/api/prices").WithTags("Prices");
+        var flat = app.MapGroup("/api/prices").WithTags("Prices").RequireAuthorization();
         flat.MapGet("/recent", GetRecentAsync);
 
         return app;

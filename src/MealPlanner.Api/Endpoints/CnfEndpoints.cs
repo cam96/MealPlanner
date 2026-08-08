@@ -20,7 +20,7 @@ public static class CnfEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/cnf").WithTags("Canadian Nutrient File");
+        var group = app.MapGroup("/api/cnf").WithTags("Canadian Nutrient File").RequireAuthorization();
 
         group.MapGet("/status", GetStatus);
         group.MapGet("/foods", SearchFoods);

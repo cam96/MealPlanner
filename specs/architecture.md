@@ -127,5 +127,64 @@ flowchart LR
 - Schema changes use EF Core **migrations** only (never `EnsureCreated`), with an
   **expand/contract** approach for destructive changes.
 
+## Authentication & authorization
+
+The app requires authentication for all user-facing pages and API endpoints.
+
+### Flow
+
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant Web as MealPlanner.Web
+    participant Google as Google OAuth
+    participant Api as MealPlanner.Api
+
+    Browser->>Web: Navigate to any page
+    Web-->>Browser: Redirect to /login
+    Browser->>Web: Click "Sign in with Google"
+    Web->>Google: OAuth challenge
+    Google-->>Web: ID token + user info
+    Web-->>Browser: Set auth cookie, redirect home
+
+    Browser->>Web: Interact with app
+    Web->>Web: Generate JWT (HMAC-SHA256, shared key)
+    Web->>Api: API call + Authorization: Bearer <JWT>
+    Api->>Api: Validate JWT signature & claims
+    Api-->>Web: Response
+    Web-->>Browser: Rendered page
+```
+
+### Components
+
+| Component | Mechanism | Details |
+| --- | --- | --- |
+| Web login | Google OAuth 2.0 | ASP.NET Core cookie auth + Google external provider |
+| Web session | Cookie | 30-day sliding expiration |
+| API auth | JWT Bearer | Validates issuer=`MealPlanner.Web`, audience=`MealPlanner.Api`, HMAC-SHA256 |
+| Signing key | Shared secret | Passed to both services via Aspire parameters |
+| Token lifetime | 1 hour | Sliding expiration; activity resets the window |
+
+### JWT issuer and audience
+
+The JWT contains two identity claims that the API validates on every request:
+
+- **Issuer (`iss`: `MealPlanner.Web`)** — identifies who created the token. The API only accepts
+  tokens issued by the Web service. This prevents tokens from untrusted sources being accepted.
+- **Audience (`aud`: `MealPlanner.Api`)** — identifies who the token is intended for. The API only
+  accepts tokens explicitly addressed to it. This prevents a token meant for a different service
+  from being replayed against the API.
+
+The Web stamps both claims when generating the token; the API rejects the token if either value
+doesn't match. In a single-API deployment this is defense-in-depth — it becomes critical if a
+second service is ever added that shares the same signing key but should not share access.
+
+### Anonymous endpoints
+
+- `/ping` — readiness probe (API)
+- `/health`, `/alive` — health checks (both services)
+- `/login` — login page (Web)
+- `/auth/login`, `/auth/logout` — OAuth flow endpoints (Web)
+
 > Keep this document updated as the architecture evolves; it is referenced from the README and the
 > project-wide Copilot instructions.

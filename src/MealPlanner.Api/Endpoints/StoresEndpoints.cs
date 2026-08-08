@@ -17,7 +17,7 @@ public static class StoresEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/stores").WithTags("Stores");
+        var group = app.MapGroup("/api/stores").WithTags("Stores").RequireAuthorization();
 
         group.MapGet("/", GetAllAsync);
         group.MapGet("/{id:int}", GetByIdAsync);

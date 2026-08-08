@@ -20,7 +20,7 @@ public static class CombosEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/combos").WithTags("Combos");
+        var group = app.MapGroup("/api/combos").WithTags("Combos").RequireAuthorization();
 
         group.MapGet("/board", GetBoardAsync);
         group.MapGet("/", GetAllAsync);

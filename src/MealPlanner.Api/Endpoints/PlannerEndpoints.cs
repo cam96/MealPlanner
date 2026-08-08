@@ -18,7 +18,7 @@ public static class PlannerEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/plans").WithTags("Planner");
+        var group = app.MapGroup("/api/plans").WithTags("Planner").RequireAuthorization();
 
         group.MapGet("/{year:int}/{month:int}", GetMonthAsync);
         group.MapPut("/days/{dayId:int}", UpdateDayAsync);
