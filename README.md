@@ -306,10 +306,13 @@ The application version flows from one source:
    sidebar for local/dev builds).
 2. **Deployment** — pass `VERSION=x.y.z` to `docker compose build` (or set it in the environment)
    to bake a real version into both images.
-3. **GitHub Release** — pushing a tag like `v1.0.0` triggers the
-   [release workflow](.github/workflows/release.yml), which validates the build, runs tests, builds
-   both Docker images with the version baked in, and attaches them as compressed tarballs to the
-   GitHub Release. Tags containing a hyphen (e.g., `v1.0.0-alpha.1`) are marked as pre-releases.
+3. **GitHub Release** — the [release workflow](.github/workflows/release.yml) (triggered manually via
+   `workflow_dispatch`) validates the build, runs tests, pushes both Docker images to **GitHub
+   Container Registry** (`ghcr.io/cam96/mealplanner-api` and `mealplanner-web`) tagged with the
+   version (and `:latest` for stable releases), and attaches compressed image tarballs
+   (`MealPlanner-Api-VERSION.tar.gz`, `MealPlanner-Web-VERSION.tar.gz`) to the GitHub Release.
+   Versions containing a hyphen (e.g., `1.0.0-alpha.1`) are marked as pre-releases and do not
+   update the `:latest` tag.
 
 The Dockerfiles accept a `VERSION` build arg and pass it to `dotnet publish /p:Version=${VERSION}`.
 The web UI reads the assembly `InformationalVersion` at runtime and displays it at the bottom of the
@@ -317,18 +320,42 @@ navigation drawer.
 
 ### Deploy from a release
 
-Download the image tarballs from a [GitHub Release](https://github.com/cam96/MealPlanner/releases)
-and load them on the server:
+Images are published to **GitHub Container Registry** (GHCR) on every release. Pull and run directly:
 
 ```bash
-gunzip mealplanner-api-1.0.0.tar.gz mealplanner-web-1.0.0.tar.gz
-docker load -i mealplanner-api-1.0.0.tar
-docker load -i mealplanner-web-1.0.0.tar
+docker compose up -d   # pulls ghcr.io/cam96/mealplanner-api:latest and mealplanner-web:latest
+```
+
+To pin a specific version:
+
+```bash
+VERSION=1.0.0 docker compose pull
+docker compose up -d
+```
+
+Alternatively, download the image tarballs from a
+[GitHub Release](https://github.com/cam96/MealPlanner/releases) for offline deployment:
+
+```bash
+gunzip MealPlanner-Api-1.0.0.tar.gz MealPlanner-Web-1.0.0.tar.gz
+docker load -i MealPlanner-Api-1.0.0.tar
+docker load -i MealPlanner-Web-1.0.0.tar
 docker compose up -d
 ```
 
 Because the images are pre-built with the version already embedded, no source code or .NET SDK is
 needed on the server — just Docker.
+
+### GHCR privacy (maintainers)
+
+Container images pushed by the release workflow inherit the repository owner's default package
+visibility. To ensure images stay **private**:
+
+1. Go to **GitHub → Settings → Packages → Package creation**.
+2. Set the default visibility to **Private**.
+
+This must be confirmed before the first release push. Visibility can also be changed per-package
+after publishing.
 
 ## Data safety
 
