@@ -163,7 +163,7 @@ sequenceDiagram
 | Web session | Cookie | 30-day sliding expiration |
 | API auth | JWT Bearer | Validates issuer=`MealPlanner.Web`, audience=`MealPlanner.Api`, HMAC-SHA256 |
 | Signing key | Shared secret | Passed to both services via Aspire parameters |
-| Token lifetime | 30 minutes | Expires after 30 min of inactivity; activity resets the window |
+| Token lifetime | 1 hour | Sliding expiration; activity resets the window |
 
 ### JWT issuer and audience
 

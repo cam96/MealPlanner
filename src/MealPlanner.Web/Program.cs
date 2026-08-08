@@ -34,7 +34,7 @@ builder.Services.AddAuthentication(options =>
     {
         options.LoginPath = "/login";
         options.LogoutPath = "/auth/logout";
-        options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
+        options.ExpireTimeSpan = TimeSpan.FromHours(1);
         options.SlidingExpiration = true;
     })
     .AddGoogle(options =>
@@ -53,7 +53,7 @@ builder.Services.AddSingleton(new JwtTokenSettings(
     Key: new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
     Issuer: "MealPlanner.Web",
     Audience: "MealPlanner.Api",
-    Lifetime: TimeSpan.FromMinutes(30)));
+    Lifetime: TimeSpan.FromHours(1)));
 builder.Services.AddScoped<JwtTokenService>();
 
 // Typed HTTP client to the API, resolved by Aspire service discovery ("api").
