@@ -6,7 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 namespace MealPlanner.Web.Services;
 
 /// <summary>
-/// Generates JWT tokens for authenticating outbound API calls. The token is minted from the
+/// Generates JWT tokens for authenticating outbound API calls. The token is created from the
 /// current user's authentication state (populated by the Google OAuth cookie) and signed with
 /// the shared HMAC key that the API validates.
 /// </summary>

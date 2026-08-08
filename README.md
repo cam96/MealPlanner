@@ -169,7 +169,7 @@ The application requires authentication to access any page or API endpoint.
 
 - **Web front-end** — Google OAuth login with cookie-based session. Unauthenticated users are
   redirected to the login page.
-- **API** — JWT Bearer authentication. The Web server mints a short-lived JWT (signed with a shared
+- **API** — JWT Bearer authentication. The Web server generates a short-lived JWT (signed with a shared
   HMAC key) after the user authenticates via Google and attaches it to every outbound API call.
 
 ### Setting up Google OAuth credentials

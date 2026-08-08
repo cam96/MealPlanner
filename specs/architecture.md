@@ -148,7 +148,7 @@ sequenceDiagram
     Web-->>Browser: Set auth cookie, redirect home
 
     Browser->>Web: Interact with app
-    Web->>Web: Mint JWT (HMAC-SHA256, shared key)
+    Web->>Web: Generate JWT (HMAC-SHA256, shared key)
     Web->>Api: API call + Authorization: Bearer <JWT>
     Api->>Api: Validate JWT signature & claims
     Api-->>Web: Response
