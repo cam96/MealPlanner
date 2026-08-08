@@ -3,7 +3,7 @@ using Microsoft.IdentityModel.Tokens;
 namespace MealPlanner.Web.Services;
 
 /// <summary>
-/// Immutable settings used by <see cref="JwtTokenService"/> to sign tokens for API calls.
+/// Immutable settings used by <see cref="JwtAuthorizationHandler"/> to sign tokens for API calls.
 /// </summary>
 /// <param name="Key">The symmetric signing key shared with the API.</param>
 /// <param name="Issuer">The token issuer claim (this Web service).</param>

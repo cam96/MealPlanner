@@ -46,7 +46,7 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 
-// JWT token service for authenticating outbound API calls.
+// JWT signing settings for authenticating outbound API calls.
 var jwtKey = builder.Configuration["Authentication:Jwt:Key"]
     ?? throw new InvalidOperationException("Authentication:Jwt:Key must be configured.");
 builder.Services.AddSingleton(new JwtTokenSettings(
@@ -54,7 +54,9 @@ builder.Services.AddSingleton(new JwtTokenSettings(
     Issuer: "MealPlanner.Web",
     Audience: "MealPlanner.Api",
     Lifetime: TimeSpan.FromHours(1)));
-builder.Services.AddScoped<JwtTokenService>();
+
+// IHttpContextAccessor is needed by JwtAuthorizationHandler to read the current user's claims.
+builder.Services.AddHttpContextAccessor();
 
 // Typed HTTP client to the API, resolved by Aspire service discovery ("api").
 // The JwtAuthorizationHandler attaches a Bearer token to every outbound request.

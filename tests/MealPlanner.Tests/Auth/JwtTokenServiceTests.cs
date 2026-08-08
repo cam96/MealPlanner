@@ -1,17 +1,18 @@
 extern alias WebAssembly;
 
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.IdentityModel.Tokens;
 using WebAssembly::MealPlanner.Web.Services;
 
 namespace MealPlanner.Tests.Auth;
 
-/// <summary>Tests for <see cref="JwtTokenService"/>.</summary>
+/// <summary>Tests for <see cref="JwtAuthorizationHandler"/>.</summary>
 [TestFixture]
-public sealed class JwtTokenServiceTests
+public sealed class JwtAuthorizationHandlerTests
 {
     private const string TestKey = "ThisIsATestSigningKeyThatIsLongEnoughForHmacSha256!";
     private const string Issuer = "MealPlanner.Web";
@@ -30,7 +31,7 @@ public sealed class JwtTokenServiceTests
     }
 
     [Test]
-    public async Task GetTokenAsync_AuthenticatedUser_ReturnsValidJwt()
+    public async Task SendAsync_AuthenticatedUser_AttachesValidBearerToken()
     {
         // Arrange
         var claims = new[]
@@ -41,19 +42,27 @@ public sealed class JwtTokenServiceTests
         };
         var identity = new ClaimsIdentity(claims, "Test");
         var principal = new ClaimsPrincipal(identity);
-        var authState = new AuthenticationState(principal);
-        var provider = new FakeAuthStateProvider(authState);
 
-        var service = new JwtTokenService(provider, _settings);
+        var httpContext = new DefaultHttpContext { User = principal };
+        var accessor = new FakeHttpContextAccessor(httpContext);
+
+        var handler = new JwtAuthorizationHandler(accessor, _settings)
+        {
+            InnerHandler = new FakeInnerHandler(),
+        };
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
 
         // Act
-        var token = await service.GetTokenAsync();
+        var response = await client.GetAsync("/test");
 
-        // Assert
-        Assert.That(token, Is.Not.Null);
+        // Assert — validate the token that was attached
+        var authHeader = ((FakeInnerHandler)handler.InnerHandler).LastRequest?.Headers.Authorization;
+        Assert.That(authHeader, Is.Not.Null);
+        Assert.That(authHeader!.Scheme, Is.EqualTo("Bearer"));
 
-        var handler = new JwtSecurityTokenHandler();
-        var validationParams = new TokenValidationParameters
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var result = await tokenHandler.ValidateTokenAsync(authHeader.Parameter!, new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidateAudience = true,
@@ -62,12 +71,10 @@ public sealed class JwtTokenServiceTests
             ValidIssuer = Issuer,
             ValidAudience = Audience,
             IssuerSigningKey = _settings.Key,
-        };
+        });
 
-        var result = await handler.ValidateTokenAsync(token, validationParams);
         Assert.That(result.IsValid, Is.True);
 
-        // Verify claims are present (claim names may use URI-format keys in the validation result).
         var claimsIdentity = result.ClaimsIdentity;
         Assert.That(claimsIdentity.FindFirst(JwtRegisteredClaimNames.Email)?.Value
             ?? claimsIdentity.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value,
@@ -78,60 +85,76 @@ public sealed class JwtTokenServiceTests
     }
 
     [Test]
-    public async Task GetTokenAsync_UnauthenticatedUser_ReturnsNull()
+    public async Task SendAsync_UnauthenticatedUser_DoesNotAttachHeader()
     {
         // Arrange
         var principal = new ClaimsPrincipal(new ClaimsIdentity());
-        var authState = new AuthenticationState(principal);
-        var provider = new FakeAuthStateProvider(authState);
+        var httpContext = new DefaultHttpContext { User = principal };
+        var accessor = new FakeHttpContextAccessor(httpContext);
 
-        var service = new JwtTokenService(provider, _settings);
+        var handler = new JwtAuthorizationHandler(accessor, _settings)
+        {
+            InnerHandler = new FakeInnerHandler(),
+        };
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
 
         // Act
-        var token = await service.GetTokenAsync();
+        await client.GetAsync("/test");
 
         // Assert
-        Assert.That(token, Is.Null);
+        var authHeader = ((FakeInnerHandler)handler.InnerHandler).LastRequest?.Headers.Authorization;
+        Assert.That(authHeader, Is.Null);
     }
 
     [Test]
-    public async Task GetTokenAsync_CachesTokenOnSubsequentCalls()
+    public async Task SendAsync_NoHttpContext_DoesNotAttachHeader()
     {
         // Arrange
-        var claims = new[] { new Claim(ClaimTypes.NameIdentifier, "user-1") };
-        var identity = new ClaimsIdentity(claims, "Test");
-        var principal = new ClaimsPrincipal(identity);
-        var authState = new AuthenticationState(principal);
-        var provider = new FakeAuthStateProvider(authState);
+        var accessor = new FakeHttpContextAccessor(null);
 
-        var service = new JwtTokenService(provider, _settings);
+        var handler = new JwtAuthorizationHandler(accessor, _settings)
+        {
+            InnerHandler = new FakeInnerHandler(),
+        };
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
 
         // Act
-        var token1 = await service.GetTokenAsync();
-        var token2 = await service.GetTokenAsync();
+        await client.GetAsync("/test");
 
-        // Assert — same instance means it was cached
-        Assert.That(token2, Is.SameAs(token1));
+        // Assert
+        var authHeader = ((FakeInnerHandler)handler.InnerHandler).LastRequest?.Headers.Authorization;
+        Assert.That(authHeader, Is.Null);
     }
 
     [Test]
-    public void Constructor_NullAuthStateProvider_ThrowsArgumentNullException()
+    public void Constructor_NullHttpContextAccessor_ThrowsArgumentNullException()
     {
-        Assert.Throws<ArgumentNullException>(() => new JwtTokenService(null!, _settings));
+        Assert.Throws<ArgumentNullException>(() => new JwtAuthorizationHandler(null!, _settings));
     }
 
     [Test]
     public void Constructor_NullSettings_ThrowsArgumentNullException()
     {
-        var provider = new FakeAuthStateProvider(
-            new AuthenticationState(new ClaimsPrincipal()));
-        Assert.Throws<ArgumentNullException>(() => new JwtTokenService(provider, null!));
+        var accessor = new FakeHttpContextAccessor(null);
+        Assert.Throws<ArgumentNullException>(() => new JwtAuthorizationHandler(accessor, null!));
     }
 
-    /// <summary>Simple fake to supply a fixed authentication state in tests.</summary>
-    private sealed class FakeAuthStateProvider(AuthenticationState state) : AuthenticationStateProvider
+    private sealed class FakeHttpContextAccessor(HttpContext? context) : IHttpContextAccessor
     {
-        public override Task<AuthenticationState> GetAuthenticationStateAsync() =>
-            Task.FromResult(state);
+        public HttpContext? HttpContext { get; set; } = context;
+    }
+
+    private sealed class FakeInnerHandler : HttpMessageHandler
+    {
+        public HttpRequestMessage? LastRequest { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            LastRequest = request;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        }
     }
 }
