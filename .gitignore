@@ -45,9 +45,6 @@ TestResults/
 data/*.db
 data/backups/
 
-# CNF dataset (downloaded locally, not committed)
-data/cnf/
-
 # User secrets / local env
 *.env
 appsettings.*.local.json

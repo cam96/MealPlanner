@@ -45,13 +45,6 @@ jobs:
       - name: Test
         run: dotnet test --no-build -c Release --verbosity normal
 
-      - name: Download Canadian Nutrient File dataset
-        run: |
-          mkdir -p data/cnf
-          curl -fsSL https://www.canada.ca/content/dam/hc-sc/migration/hc-sc/fn-an/alt_formats/zip/nutrition/fiche-nutri-data/cnf-fcen-csv.zip -o cnf.zip
-          unzip -o cnf.zip -d data/cnf
-          rm cnf.zip
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
