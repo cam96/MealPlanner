@@ -19,7 +19,7 @@ public static class ShoppingEndpoints
         ArgumentNullException.ThrowIfNull(app);
 
         var group = app.MapGroup("/api/plans/{year:int}/{month:int}/shopping-list")
-            .WithTags("Shopping");
+            .WithTags("Shopping").RequireAuthorization();
 
         group.MapGet("/", GetAsync);
 

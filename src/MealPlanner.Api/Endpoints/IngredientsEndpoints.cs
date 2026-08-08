@@ -18,7 +18,7 @@ public static class IngredientsEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/ingredients").WithTags("Ingredients");
+        var group = app.MapGroup("/api/ingredients").WithTags("Ingredients").RequireAuthorization();
 
         group.MapGet("/", GetAllAsync);
         group.MapGet("/{id:int}", GetByIdAsync);

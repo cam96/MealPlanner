@@ -1,3 +1,8 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.IdentityModel.Tokens;
 using MealPlanner.Web.Components;
 using MealPlanner.Web.Services;
 using MudBlazor.Services;
@@ -14,9 +19,49 @@ builder.Services.AddMudServices();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Authentication: cookie session (for the Blazor circuit) backed by Google OAuth.
+var googleClientId = builder.Configuration["Authentication:Google:ClientId"]
+    ?? throw new InvalidOperationException("Authentication:Google:ClientId must be configured.");
+var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"]
+    ?? throw new InvalidOperationException("Authentication:Google:ClientSecret must be configured.");
+
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
+    })
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/login";
+        options.LogoutPath = "/auth/logout";
+        options.ExpireTimeSpan = TimeSpan.FromDays(30);
+        options.SlidingExpiration = true;
+    })
+    .AddGoogle(options =>
+    {
+        options.ClientId = googleClientId;
+        options.ClientSecret = googleClientSecret;
+    });
+
+builder.Services.AddAuthorization();
+builder.Services.AddCascadingAuthenticationState();
+
+// JWT token service for authenticating outbound API calls.
+var jwtKey = builder.Configuration["Authentication:Jwt:Key"]
+    ?? throw new InvalidOperationException("Authentication:Jwt:Key must be configured.");
+builder.Services.AddSingleton(new JwtTokenSettings(
+    Key: new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+    Issuer: "MealPlanner.Web",
+    Audience: "MealPlanner.Api",
+    Lifetime: TimeSpan.FromHours(1)));
+builder.Services.AddScoped<JwtTokenService>();
+
 // Typed HTTP client to the API, resolved by Aspire service discovery ("api").
+// The JwtAuthorizationHandler attaches a Bearer token to every outbound request.
+builder.Services.AddTransient<JwtAuthorizationHandler>();
 builder.Services.AddHttpClient<MealPlannerApiClient>(client =>
-    client.BaseAddress = new Uri("https+http://api"));
+    client.BaseAddress = new Uri("https+http://api"))
+    .AddHttpMessageHandler<JwtAuthorizationHandler>();
 
 var app = builder.Build();
 
@@ -30,7 +75,23 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.UseAntiforgery();
+
+// Authentication endpoints — these must be server-side HTTP endpoints (not Blazor components)
+// because the OAuth redirect flow requires real HTTP redirects.
+app.MapGet("/auth/login", (string? returnUrl) =>
+    Results.Challenge(new AuthenticationProperties { RedirectUri = returnUrl ?? "/" },
+        [GoogleDefaults.AuthenticationScheme]))
+    .AllowAnonymous();
+
+app.MapGet("/auth/logout", async (HttpContext context) =>
+{
+    await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    return Results.Redirect("/login");
+}).AllowAnonymous();
 
 // Aspire default endpoints (health/liveness).
 app.MapDefaultEndpoints();

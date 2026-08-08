@@ -160,6 +160,57 @@ strings over HTTP.
 | Dashboard | `GET /api/plans/{year}/{month}/dashboard` |
 | Canadian Nutrient File | `GET /api/cnf/status`, `GET /api/cnf/foods?query=`, `GET /api/cnf/foods/{foodCode}` |
 
+All API endpoints except `/ping` and health checks require a valid JWT Bearer token. Tokens are
+issued by the Web front-end after Google OAuth login.
+
+## Authentication & authorization
+
+The application requires authentication to access any page or API endpoint.
+
+- **Web front-end** — Google OAuth login with cookie-based session. Unauthenticated users are
+  redirected to the login page.
+- **API** — JWT Bearer authentication. The Web server mints a short-lived JWT (signed with a shared
+  HMAC key) after the user authenticates via Google and attaches it to every outbound API call.
+
+### Setting up Google OAuth credentials
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Create a new project (or reuse an existing one).
+3. Navigate to **APIs & Services → Credentials → Create Credentials → OAuth client ID**.
+4. Set application type to **Web application**.
+5. Under **Authorized redirect URIs**, add:
+   - `https://localhost:<port>/signin-google` (for local development)
+   - `http://<your-server>:8080/signin-google` (for Docker deployment)
+6. Copy the **Client ID** and **Client Secret**.
+
+### Configuring secrets (local development with Aspire)
+
+Store the Google OAuth credentials and JWT signing key in the AppHost's user secrets:
+
+```powershell
+cd src/MealPlanner.AppHost
+dotnet user-secrets set "Parameters:jwt-key" "<a-random-256-bit-key>"
+dotnet user-secrets set "Parameters:google-client-id" "<your-google-client-id>"
+dotnet user-secrets set "Parameters:google-client-secret" "<your-google-client-secret>"
+```
+
+> **Tip:** Generate a random key with:
+> `[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Max 256 }) -as [byte[]])`
+
+### Configuring secrets (Docker Compose deployment)
+
+Add the auth environment variables to `docker-compose.yml` or a `.env` file:
+
+```yaml
+# In the api service:
+Authentication__Jwt__Key: "<same-key-as-web>"
+
+# In the web service:
+Authentication__Jwt__Key: "<same-key-as-api>"
+Authentication__Google__ClientId: "<your-google-client-id>"
+Authentication__Google__ClientSecret: "<your-google-client-secret>"
+```
+
 ## Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)

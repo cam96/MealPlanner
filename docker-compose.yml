@@ -20,6 +20,8 @@ services:
       MealPlanner__CnfDirectory: /data/cnf
       # Set to true on a fresh install to load representative demo data (off by default).
       MealPlanner__SeedDemoData: "false"
+      # JWT authentication — must match the key used by the web service.
+      Authentication__Jwt__Key: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
     volumes:
       - mealplanner-data:/data
       - mealplanner-backups:/backups
@@ -43,6 +45,10 @@ services:
       ASPNETCORE_URLS: http://+:8080
       # Aspire service discovery: resolve the "api" client base address to the api container.
       services__api__http__0: http://api:8080
+      # Authentication: Google OAuth + JWT signing key (must match the api service key).
+      Authentication__Jwt__Key: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
+      Authentication__Google__ClientId: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env}
+      Authentication__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET in .env}
     ports:
       # Browse the app at http://<host>:8080 on the home network.
       - "8080:8080"

@@ -1,7 +1,15 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
+// Authentication parameters (values come from user secrets during development or from environment
+// variables in production). The JWT key must be shared by both services; Google credentials are
+// only needed by the Web front-end which handles the OAuth flow.
+var jwtKey = builder.AddParameter("jwt-key", secret: true);
+var googleClientId = builder.AddParameter("google-client-id");
+var googleClientSecret = builder.AddParameter("google-client-secret", secret: true);
+
 // The API owns the SQLite database and is the reusable backend.
-var api = builder.AddProject<Projects.MealPlanner_Api>("api");
+var api = builder.AddProject<Projects.MealPlanner_Api>("api")
+    .WithEnvironment("Authentication__Jwt__Key", jwtKey);
 
 if (builder.ExecutionContext.IsPublishMode)
 {
@@ -16,6 +24,9 @@ if (builder.ExecutionContext.IsPublishMode)
 // The Blazor front-end calls the API via Aspire service discovery (never the database directly).
 builder.AddProject<Projects.MealPlanner_Web>("web")
     .WithReference(api)
-    .WaitFor(api);
+    .WaitFor(api)
+    .WithEnvironment("Authentication__Jwt__Key", jwtKey)
+    .WithEnvironment("Authentication__Google__ClientId", googleClientId)
+    .WithEnvironment("Authentication__Google__ClientSecret", googleClientSecret);
 
 builder.Build().Run();

@@ -127,5 +127,50 @@ flowchart LR
 - Schema changes use EF Core **migrations** only (never `EnsureCreated`), with an
   **expand/contract** approach for destructive changes.
 
+## Authentication & authorization
+
+The app requires authentication for all user-facing pages and API endpoints.
+
+### Flow
+
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant Web as MealPlanner.Web
+    participant Google as Google OAuth
+    participant Api as MealPlanner.Api
+
+    Browser->>Web: Navigate to any page
+    Web-->>Browser: Redirect to /login
+    Browser->>Web: Click "Sign in with Google"
+    Web->>Google: OAuth challenge
+    Google-->>Web: ID token + user info
+    Web-->>Browser: Set auth cookie, redirect home
+
+    Browser->>Web: Interact with app
+    Web->>Web: Mint JWT (HMAC-SHA256, shared key)
+    Web->>Api: API call + Authorization: Bearer <JWT>
+    Api->>Api: Validate JWT signature & claims
+    Api-->>Web: Response
+    Web-->>Browser: Rendered page
+```
+
+### Components
+
+| Component | Mechanism | Details |
+| --- | --- | --- |
+| Web login | Google OAuth 2.0 | ASP.NET Core cookie auth + Google external provider |
+| Web session | Cookie | 30-day sliding expiration |
+| API auth | JWT Bearer | Validates issuer=`MealPlanner.Web`, audience=`MealPlanner.Api`, HMAC-SHA256 |
+| Signing key | Shared secret | Passed to both services via Aspire parameters |
+| Token lifetime | 1 hour | Cached in the Blazor circuit; refreshed automatically |
+
+### Anonymous endpoints
+
+- `/ping` — readiness probe (API)
+- `/health`, `/alive` — health checks (both services)
+- `/login` — login page (Web)
+- `/auth/login`, `/auth/logout` — OAuth flow endpoints (Web)
+
 > Keep this document updated as the architecture evolves; it is referenced from the README and the
 > project-wide Copilot instructions.

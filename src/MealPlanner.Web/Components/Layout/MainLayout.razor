@@ -12,7 +12,15 @@
         <MudIcon Icon="@Icons.Material.Filled.Restaurant" Class="mr-2" />
         <MudText Typo="Typo.h6">MealPlanner</MudText>
         <MudSpacer />
-        <MudText Typo="Typo.caption" Class="d-none d-sm-block">Home kitchen planner</MudText>
+        <AuthorizeView>
+            <Authorized>
+                <MudText Typo="Typo.caption" Class="d-none d-sm-block mr-2">
+                    @context.User.Identity?.Name
+                </MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit"
+                               Href="/auth/logout" title="Sign out" />
+            </Authorized>
+        </AuthorizeView>
     </MudAppBar>
 
     <MudDrawer @bind-Open="_drawerOpen" Elevation="1" ClipMode="DrawerClipMode.Always"

@@ -17,7 +17,7 @@ public static class PeopleEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/people").WithTags("People");
+        var group = app.MapGroup("/api/people").WithTags("People").RequireAuthorization();
 
         group.MapGet("/", GetAllAsync);
         group.MapGet("/{id:int}", GetByIdAsync);
