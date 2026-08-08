@@ -291,9 +291,9 @@ VERSION=1.2.3 docker compose up -d --build   # versioned build
 The `VERSION` variable is baked into the published assemblies and displayed in the web UI (bottom of
 the sidebar). Omit it for a local dev build (`0.0.0-dev`).
 
-The `docker-compose.yml` bind-mounts `./data/cnf` into the API container automatically. If the
-folder is absent (CNF not yet downloaded), Docker skips the mount and CNF search is simply hidden
-in the UI.
+If the CNF CSV files are present in `data/cnf/` at build time, they are bundled into the API image
+so the deployment is fully self-contained. When absent, the image still builds and CNF search is
+simply hidden in the UI.
 
 > `aspire publish` can also generate an equivalent Compose project; the checked-in
 > [docker-compose.yml](docker-compose.yml) is the maintained home-deploy artifact.
@@ -372,9 +372,8 @@ API (never committed to source control).
 
 The API reads the dataset lazily and caches it in memory; when the files are absent the CNF search
 is simply hidden. The directory is configured by `MealPlanner:CnfDirectory` (defaults to `data/cnf`;
-the development profile points at the repo-root copy). The `docker-compose.yml` bind-mounts
-`./data/cnf` into the container automatically — just drop the CSVs into `data/cnf/` before running
-`docker compose up`.
+the development profile points at the repo-root copy). The Docker build bundles `data/cnf/` into
+the API image automatically — just drop the CSVs into `data/cnf/` before building.
 
 Attribution shown in the UI: **"Canadian Nutrient File, Health Canada, 2015"**.
 

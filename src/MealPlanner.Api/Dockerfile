@@ -10,6 +10,11 @@ RUN dotnet restore src/MealPlanner.Api/MealPlanner.Api.csproj
 RUN dotnet publish src/MealPlanner.Api/MealPlanner.Api.csproj -c Release -o /app --no-restore \
     /p:Version=${VERSION}
 
+# Stage the CNF dataset (if present) into a known location for the final image.
+RUN mkdir -p /cnf && if [ -d data/cnf ] && [ "$(ls -A data/cnf 2>/dev/null)" ]; then \
+      cp data/cnf/* /cnf/; \
+    fi
+
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
@@ -26,6 +31,9 @@ RUN apt-get update \
     && chown app:app /data /data/cnf /backups
 
 COPY --from=build /app .
+
+# Bundle the Canadian Nutrient File dataset when present in the build context.
+COPY --from=build /cnf/ /data/cnf/
 
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
