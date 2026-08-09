@@ -246,10 +246,12 @@ pending migrations, applies migrations, and enables WAL mode.
 
 ## Deploy to a home server (Docker Compose)
 
-The app is packaged as two small containers (**API** + **Web**) orchestrated by the checked-in
-[docker-compose.yml](docker-compose.yml), with a multi-stage Dockerfile per service. Because the
-images are built **from source inside Docker**, the server needs only Docker — no .NET SDK, no
-Aspire tooling, and no manual publish step. The whole stack comes up with a single command.
+The app is packaged as two small containers (**API** + **Web**) behind a **Caddy** reverse proxy,
+orchestrated by the checked-in [docker-compose.yml](docker-compose.yml), with a multi-stage
+Dockerfile per service. Caddy terminates TLS using a Cloudflare Origin Certificate so the app is
+served over HTTPS on port 443. Because the images are built **from source inside Docker**, the server
+needs only Docker — no .NET SDK, no Aspire tooling, and no manual publish step. The whole stack comes
+up with a single command.
 
 ### 1. Install on the server
 
@@ -320,7 +322,28 @@ variables. The containers will refuse to start if any of these are missing.
 > **Important:** Never commit `.env` to source control — it is already in `.gitignore`. On the
 > server, restrict file permissions (`chmod 600`) so only the deploying user can read it.
 
-### 4. Run the app on the server
+### 4. Set up the Cloudflare Origin Certificate
+
+The domain `mealplanner.cameronmckay.ca` is managed by Cloudflare with proxy mode (orange cloud)
+enabled. Cloudflare terminates TLS for visitors; the Origin Certificate secures the
+Cloudflare → origin connection.
+
+1. In the Cloudflare dashboard, go to **SSL/TLS → Origin Server → Create Certificate**.
+2. Choose **RSA (2048)**, enter `mealplanner.cameronmckay.ca` as the hostname, and set the
+   validity (up to 15 years).
+3. Save the **certificate** as `certs/origin.crt` and the **private key** as `certs/origin.key`
+   in the repository root on the server.
+
+```bash
+mkdir -p certs
+# paste/copy the cert and key files into this directory
+ls certs/
+# origin.crt  origin.key
+```
+
+> The `certs/` directory is gitignored — private keys must never be committed.
+
+### 5. Run the app on the server
 
 From the copied repository root on the server:
 
@@ -334,15 +357,15 @@ container rebuilds and updates; both services use `restart: unless-stopped`, so 
 automatically after a reboot or crash. On first start the API creates the database directory,
 applies EF Core migrations, and enables WAL mode.
 
-Browse the app at **`http://<server-ip>:8080`** from any device on the LAN. Only the **Web**
-container publishes a port (`8080`); the **API** is reached internally by the `api` service name via
-Aspire service-discovery configuration and is not exposed to the network.
+Browse the app at **`https://mealplanner.cameronmckay.ca`** (Cloudflare proxied). Only **Caddy**
+publishes a host port (443); the **Web** and **API** containers are internal-only on the Docker
+network and cannot be reached directly from outside.
 
 To load representative **demo data** on a fresh install, set `MealPlanner__SeedDemoData: "true"` on
 the `api` service in [docker-compose.yml](docker-compose.yml) before the first `up` (seeding runs
 only when the database is empty). Leave it `"false"` to start clean.
 
-### 5. Manage, update, and view logs
+### 6. Manage, update, and view logs
 
 ```bash
 docker compose ps                 # container status and health
@@ -350,12 +373,24 @@ docker compose logs -f            # follow logs (add a service name to scope: ap
 docker compose down               # stop and remove containers (named volumes/data are kept)
 ```
 
+#### Update from source (building locally)
+
 To deploy a new version after pulling code changes, rebuild and recreate in place — the data
 volumes are untouched:
 
 ```bash
 git pull                          # or re-copy the repo
 VERSION=1.2.3 docker compose up -d --build   # versioned build
+```
+
+#### Update from pre-built images (recommended)
+
+If your deployment uses the pre-built GHCR images (see [Deploy from a release](#deploy-from-a-release)),
+pull the latest and replace the running containers:
+
+```bash
+docker compose pull               # pull the latest images from GHCR
+docker compose up -d              # recreate containers with the new images
 ```
 
 The `VERSION` variable is baked into the published assemblies and displayed in the web UI (bottom of
@@ -390,10 +425,12 @@ navigation drawer.
 
 ### Deploy from a release
 
-Images are published to **GitHub Container Registry** (GHCR) on every release. Pull and run directly:
+Images are published to **GitHub Container Registry** (GHCR) on every release. Pull the latest
+images and start the stack:
 
 ```bash
-docker compose up -d   # pulls ghcr.io/cam96/mealplanner-api:latest and mealplanner-web:latest
+docker compose pull               # pulls ghcr.io/cam96/mealplanner-api:latest and mealplanner-web:latest
+docker compose up -d              # starts containers from the pulled images
 ```
 
 To pin a specific version:
@@ -403,7 +440,27 @@ VERSION=1.0.0 docker compose pull
 docker compose up -d
 ```
 
-Alternatively, download the image tarballs from a
+#### Update a running deployment to the latest release
+
+When a new release is published, pull the updated images and recreate the containers in place —
+existing data volumes are preserved:
+
+```bash
+docker compose pull               # fetches the newest :latest images from GHCR
+docker compose up -d              # recreates only containers whose image changed
+```
+
+This is zero-downtime for the data: named volumes (`mealplanner-data`, `mealplanner-backups`) are
+**not** removed. The API applies any pending EF Core migrations on startup (after backing up the
+database). If you want to force-recreate both containers even when the image hasn't changed:
+
+```bash
+docker compose up -d --force-recreate
+```
+
+#### Offline deployment from release tarballs
+
+Alternatively, download the image tarballs and deployment files from a
 [GitHub Release](https://github.com/cam96/MealPlanner/releases) for offline deployment:
 
 ```bash
@@ -413,8 +470,8 @@ docker load -i MealPlanner-Web-1.0.0.tar
 docker compose up -d
 ```
 
-Because the images are pre-built with the version already embedded, no source code or .NET SDK is
-needed on the server — just Docker.
+Each release also includes the latest `docker-compose.yml` and `Caddyfile`, so you can update
+your deployment files without cloning the repo.
 
 ### GHCR privacy (maintainers)
 

@@ -1,6 +1,7 @@
-# MealPlanner — home deployment stack. One `docker compose up -d` runs the whole app on the
-# local network. The API owns the SQLite database; the Blazor web front-end reaches it by the
-# `api` service name via Aspire service discovery configuration.
+# MealPlanner — home deployment stack. One `docker compose up -d` runs the whole app behind
+# HTTPS on the home network. Caddy terminates TLS using a Cloudflare Origin Certificate and
+# proxies to the Blazor web front-end, which reaches the API by the `api` service name via
+# Aspire service discovery configuration.
 services:
   api:
     build:
@@ -49,14 +50,26 @@ services:
       Authentication__Jwt__Key: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
       Authentication__Google__ClientId: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env}
       Authentication__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET in .env}
-    ports:
-      # Browse the app at http://<host>:8080 on the home network.
-      - "8080:8080"
     depends_on:
       api:
         condition: service_healthy
     restart: unless-stopped
 
+  # Reverse proxy — TLS termination with Cloudflare Origin Certificate.
+  # Only service with a published port; web and api are internal-only.
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/etc/caddy/certs:ro
+      - caddy-data:/data
+    depends_on:
+      - web
+    restart: unless-stopped
+
 volumes:
   mealplanner-data:
   mealplanner-backups:
+  caddy-data:

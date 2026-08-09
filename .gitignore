@@ -49,6 +49,9 @@ data/backups/
 *.env
 appsettings.*.local.json
 
+# TLS certificates (Cloudflare Origin Certificates — never commit private keys)
+certs/
+
 # OS files
 .DS_Store
 Thumbs.db
