@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 using MealPlanner.Web.Components;
 using MealPlanner.Web.Services;
@@ -11,6 +12,20 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Aspire cross-cutting concerns: OpenTelemetry, health checks, resilience, service discovery.
 builder.AddServiceDefaults();
+
+// In production the Web container sits behind Caddy (TLS termination). Caddy's reverse_proxy
+// sends X-Forwarded-For/Proto/Host automatically. This middleware reads those headers so
+// HttpContext.Request.Scheme reports "https" — critical for generating correct OAuth redirect URIs.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor
+                             | ForwardedHeaders.XForwardedProto
+                             | ForwardedHeaders.XForwardedHost;
+    // The web container is only reachable on the internal Docker network (no published ports),
+    // so trusting all forwarded headers is safe — only Caddy can reach it.
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // MudBlazor UI services.
 builder.Services.AddMudServices();
@@ -68,6 +83,8 @@ builder.Services.AddHttpClient<MealPlannerApiClient>(client =>
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+app.UseForwardedHeaders();
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
