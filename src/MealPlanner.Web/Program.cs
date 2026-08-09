@@ -99,8 +99,8 @@ builder.Services.AddAuthentication(options =>
                 // Graceful degradation: if the API is unreachable, assign the default role.
             }
 
-            // Fallback: assign the default User role.
-            identity.AddClaim(new Claim(ClaimTypes.Role, AppRoles.User));
+            // Fallback: if the API is unreachable, assign UserPending to avoid bypassing approval.
+            identity.AddClaim(new Claim(ClaimTypes.Role, AppRoles.UserPending));
         };
     });
 

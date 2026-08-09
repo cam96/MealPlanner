@@ -1,0 +1,188 @@
+@page "/user-approvals"
+@attribute [Authorize(Policy = "Admin")]
+@using MealPlanner.Contracts.Auth
+@using MealPlanner.ServiceDefaults.Authorization
+@inject MealPlannerApiClient Api
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>User Approvals - MealPlanner</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-2 d-none d-sm-block">User Approvals</MudText>
+
+<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+    Review and approve new user registrations. Approved users receive the User role;
+    rejected users are removed from the system.
+</MudText>
+
+<MudPaper Elevation="1" Class="pa-4 mb-4">
+    <MudGrid>
+        <MudItem xs="12" sm="6" md="4">
+            <MudTextField T="string"
+                          @bind-Value="_searchText"
+                          Placeholder="Search by name or email..."
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          DebounceInterval="300"
+                          OnDebounceIntervalElapsed="OnSearchChangedAsync" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="8" Class="d-flex align-center gap-2 justify-end">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Success"
+                       StartIcon="@Icons.Material.Filled.DoneAll"
+                       Disabled="!HasPendingUsers"
+                       OnClick="ApproveAllAsync">
+                Approve All
+            </MudButton>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.DeleteSweep"
+                       Disabled="!HasPendingUsers"
+                       OnClick="RejectAllAsync">
+                Reject All
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_pendingUsers.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
+        No pending users to review.
+    </MudAlert>
+}
+else
+{
+    <MudDataGrid T="AppUserDto"
+                 Items="_pendingUsers"
+                 Hover="true"
+                 Elevation="1">
+        <Columns>
+            <PropertyColumn Property="u => u.Name" Title="Name" />
+            <PropertyColumn Property="u => u.Email" Title="Email" />
+            <PropertyColumn Property="u => u.CreatedAt" Title="Registered" Format="yyyy-MM-dd HH:mm" />
+            <TemplateColumn CellClass="d-flex justify-end gap-1" Title="Actions" Sortable="false">
+                <CellTemplate>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Success"
+                               Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Check"
+                               OnClick="() => ApproveAsync(context.Item)">
+                        Approve
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Error"
+                               Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Close"
+                               OnClick="() => RejectAsync(context.Item)">
+                        Reject
+                    </MudButton>
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+    </MudDataGrid>
+}
+
+@code {
+    private IReadOnlyList<AppUserDto> _pendingUsers = [];
+    private bool _loading = true;
+    private string _searchText = string.Empty;
+
+    private bool HasPendingUsers => _pendingUsers.Count > 0;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPendingUsersAsync();
+    }
+
+    private async Task LoadPendingUsersAsync()
+    {
+        _loading = true;
+        _pendingUsers = await Api.GetPendingUsersAsync(
+            string.IsNullOrWhiteSpace(_searchText) ? null : _searchText);
+        _loading = false;
+    }
+
+    private async Task OnSearchChangedAsync()
+    {
+        await LoadPendingUsersAsync();
+    }
+
+    private async Task ApproveAsync(AppUserDto user)
+    {
+        var approved = await Api.ApproveUserAsync(user.Id);
+        if (approved is not null)
+        {
+            Snackbar.Add($"{user.Name} has been approved.", Severity.Success);
+            await LoadPendingUsersAsync();
+        }
+        else
+        {
+            Snackbar.Add($"Failed to approve {user.Name}.", Severity.Error);
+        }
+    }
+
+    private async Task RejectAsync(AppUserDto user)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Reject User",
+            MarkupMessage = new MarkupString(
+                $"Are you sure you want to reject <strong>{user.Name}</strong> ({user.Email})? " +
+                "This will delete their account. They can register again later."),
+            YesText = "Reject",
+            CancelText = "Cancel",
+        });
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        var success = await Api.RejectUserAsync(user.Id);
+        if (success)
+        {
+            Snackbar.Add($"{user.Name} has been rejected and removed.", Severity.Warning);
+            await LoadPendingUsersAsync();
+        }
+        else
+        {
+            Snackbar.Add($"Failed to reject {user.Name}.", Severity.Error);
+        }
+    }
+
+    private async Task ApproveAllAsync()
+    {
+        var count = await Api.ApproveAllUsersAsync();
+        Snackbar.Add($"{count} user(s) approved.", Severity.Success);
+        await LoadPendingUsersAsync();
+    }
+
+    private async Task RejectAllAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Reject All Pending Users",
+            MarkupMessage = new MarkupString(
+                $"Are you sure you want to reject all <strong>{_pendingUsers.Count}</strong> pending user(s)? " +
+                "This will delete their accounts. They can register again later."),
+            YesText = "Reject All",
+            CancelText = "Cancel",
+        });
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        var count = await Api.RejectAllUsersAsync();
+        Snackbar.Add($"{count} user(s) rejected and removed.", Severity.Warning);
+        await LoadPendingUsersAsync();
+    }
+}

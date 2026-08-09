@@ -1,4 +1,5 @@
 ﻿@using System.Reflection
+@using MealPlanner.ServiceDefaults.Authorization
 
 <MudNavMenu>
     <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
@@ -11,6 +12,14 @@
     <MudNavLink Href="planner" Icon="@Icons.Material.Filled.CalendarMonth">Meal Planner</MudNavLink>
     <MudNavLink Href="shopping-list" Icon="@Icons.Material.Filled.ShoppingCart">Shopping List</MudNavLink>
     <MudNavLink Href="settings" Icon="@Icons.Material.Filled.Settings">Settings</MudNavLink>
+
+    <AuthorizeView Policy="@AuthorizationPolicies.Admin">
+        <Authorized>
+            <MudDivider Class="my-2" />
+            <MudNavLink Href="user-approvals" Icon="@Icons.Material.Filled.HowToReg">User Approvals</MudNavLink>
+            <MudNavLink Href="users" Icon="@Icons.Material.Filled.AdminPanelSettings">User Management</MudNavLink>
+        </Authorized>
+    </AuthorizeView>
 </MudNavMenu>
 
 <MudSpacer />
