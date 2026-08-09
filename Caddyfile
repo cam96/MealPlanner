@@ -8,5 +8,8 @@ mealplanner.cameronmckay.ca {
 			trust_pool file /etc/caddy/certs/cloudflare-origin-pull-ca.pem
 		}
 	}
+	# reverse_proxy automatically sends X-Forwarded-For, X-Forwarded-Proto, and X-Forwarded-Host
+	# to the backend — the ASP.NET Core ForwardedHeaders middleware reads these to determine the
+	# original request scheme (https) for OAuth redirect URIs.
 	reverse_proxy web:8080
 }

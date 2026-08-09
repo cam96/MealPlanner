@@ -180,7 +180,7 @@ The application requires authentication to access any page or API endpoint.
 4. Set application type to **Web application**.
 5. Under **Authorized redirect URIs**, add:
    - `https://localhost:<port>/signin-google` (for local development)
-   - `http://<your-server>:8080/signin-google` (for Docker deployment)
+   - `https://<your-domain>/signin-google` (for Docker deployment behind a reverse proxy)
 6. Copy the **Client ID** and **Client Secret**.
 
 ### Configuring secrets (local development with Aspire)
