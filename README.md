@@ -183,33 +183,9 @@ The application requires authentication to access any page or API endpoint.
    - `https://<your-domain>/signin-google` (for Docker deployment behind a reverse proxy)
 6. Copy the **Client ID** and **Client Secret**.
 
-### Configuring secrets (local development with Aspire)
-
-Store the Google OAuth credentials and JWT signing key in the AppHost's user secrets:
-
-```powershell
-cd src/MealPlanner.AppHost
-dotnet user-secrets set "Parameters:jwt-key" "<a-random-256-bit-key>"
-dotnet user-secrets set "Parameters:google-client-id" "<your-google-client-id>"
-dotnet user-secrets set "Parameters:google-client-secret" "<your-google-client-secret>"
-```
-
-> **Tip:** Generate a random key with:
-> `[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Max 256 }) -as [byte[]])`
-
-### Configuring secrets (Docker Compose deployment)
-
-Add the auth environment variables to `docker-compose.yml` or a `.env` file:
-
-```yaml
-# In the api service:
-Authentication__Jwt__Key: "<same-key-as-web>"
-
-# In the web service:
-Authentication__Jwt__Key: "<same-key-as-api>"
-Authentication__Google__ClientId: "<your-google-client-id>"
-Authentication__Google__ClientSecret: "<your-google-client-secret>"
-```
+Secret configuration is covered in each deployment guide:
+- [Local development](docs/deploy-local.md#configure-authentication-secrets) — Aspire user secrets
+- [Home server / cloud](docs/deploy-home-server.md#1-configure-authentication-secrets) — `.env` file
 
 ## Prerequisites
 
@@ -225,194 +201,29 @@ dotnet build MealPlanner.slnx
 dotnet test MealPlanner.slnx
 ```
 
-## Run locally (Aspire)
+## Deployment
+
+| Scenario | Guide | Summary |
+| --- | --- | --- |
+| **Local development** | [docs/deploy-local.md](docs/deploy-local.md) | Run with `aspire run`; Aspire handles service discovery and dashboard |
+| **Home server** | [docs/deploy-home-server.md](docs/deploy-home-server.md) | Docker Compose + Caddy reverse proxy with Cloudflare TLS |
+| **Cloud / VPS** | [docs/deploy-cloud.md](docs/deploy-cloud.md) | Same Docker stack on a remote VM with Let's Encrypt or Cloudflare |
+
+### Quick start (local)
 
 ```powershell
 aspire run
 ```
 
-This starts the AppHost, which launches the **API** and **Web** services and opens the Aspire
-**dashboard** (logs, traces, metrics, health). The Web UI reaches the API through Aspire service
-discovery — you don't configure URLs by hand.
-
-To run just the API (for example to inspect endpoints):
-
-```powershell
-dotnet run --project src/MealPlanner.Api
-```
-
-On startup the API ensures the database directory exists, backs up the SQLite file when there are
-pending migrations, applies migrations, and enables WAL mode.
-
-## Deploy to a home server (Docker Compose)
-
-The app is packaged as two small containers (**API** + **Web**) behind a **Caddy** reverse proxy,
-orchestrated by the checked-in [docker-compose.yml](docker-compose.yml), with a multi-stage
-Dockerfile per service. Caddy terminates TLS using a Cloudflare Origin Certificate so the app is
-served over HTTPS on port 443. Because the images are built **from source inside Docker**, the server
-needs only Docker — no .NET SDK, no Aspire tooling, and no manual publish step. The whole stack comes
-up with a single command.
-
-### 1. Install on the server
-
-The server can run any OS that supports Docker (Linux is recommended for a headless home server;
-Windows and macOS work too). Install:
-
-- **Docker Engine + Docker Compose v2** — the only required dependency.
-  - **Linux (Debian/Ubuntu):**
-
-    ```bash
-    curl -fsSL https://get.docker.com | sh
-    sudo usermod -aG docker $USER   # then log out/in so `docker` runs without sudo
-    ```
-
-    This installs Docker Engine and the `docker compose` plugin. Verify with `docker --version`
-    and `docker compose version`.
-  - **Windows / macOS:** install [Docker Desktop](https://www.docker.com/products/docker-desktop/),
-    which includes Compose.
-
-No other runtime is needed on the server — .NET, EF Core, and every NuGet package are compiled and
-bundled into the images during the build.
-
-### 2. Copy the repository to the server
-
-The Docker build needs the **whole repository** (the build context is the repo root so the shared
-`Directory.Build.props` / `Directory.Packages.props` and all projects are available during restore).
-Copy the entire working tree to the server — the simplest options:
-
-- **Git (recommended):** clone the repo directly on the server so updates are just `git pull`.
-
-  ```bash
-  git clone <your-repo-url> mealplanner
-  cd mealplanner
-  ```
-
-- **SCP / rsync from your dev machine** (skip build output to keep the copy small):
-
-  ```powershell
-  # from the repository root on your PC (PowerShell)
-  scp -r . <user>@<server-ip>:/home/<user>/mealplanner
-  ```
-
-  ```bash
-  # or with rsync (Linux/macOS/WSL), excluding local build artifacts
-  rsync -av --exclude 'bin/' --exclude 'obj/' --exclude 'data/mealplanner.db' \
-    ./ <user>@<server-ip>:/home/<user>/mealplanner/
-  ```
-
-You do **not** need to copy `bin/`, `obj/`, or any locally built database — those are rebuilt or
-created on the server. Named Docker volumes (not files in the repo) hold the live data.
-
-### 3. Configure authentication secrets
-
-Create a `.env` file in the repository root on the server (next to `docker-compose.yml`):
+### Quick start (home server)
 
 ```bash
-cat > .env << 'EOF'
-JWT_SIGNING_KEY=<a-random-string-at-least-32-characters>
-GOOGLE_CLIENT_ID=<your-google-oauth-client-id>
-GOOGLE_CLIENT_SECRET=<your-google-oauth-client-secret>
-EOF
-chmod 600 .env
+docker compose up -d --build      # build from source
+# — or —
+docker compose pull && docker compose up -d   # pull pre-built images from GHCR
 ```
 
-Docker Compose automatically reads `.env` and substitutes the values into the service environment
-variables. The containers will refuse to start if any of these are missing.
-
-> **Important:** Never commit `.env` to source control — it is already in `.gitignore`. On the
-> server, restrict file permissions (`chmod 600`) so only the deploying user can read it.
-
-### 4. Set up the Cloudflare Origin Certificate
-
-The domain `mealplanner.cameronmckay.ca` is managed by Cloudflare with proxy mode (orange cloud)
-enabled. Cloudflare terminates TLS for visitors; the Origin Certificate secures the
-Cloudflare → origin connection.
-
-1. In the Cloudflare dashboard, go to **SSL/TLS → Origin Server → Create Certificate**.
-2. Choose **RSA (2048)**, enter `mealplanner.cameronmckay.ca` as the hostname, and set the
-   validity (up to 15 years).
-3. Save the **certificate** as `certs/mealplanner.cameronmckay.ca.pem` and the **private key** as
-   `certs/mealplanner.cameronmckay.ca.key` in the repository root on the server.
-
-```bash
-mkdir -p certs
-# paste/copy the cert and key files into this directory
-ls certs/
-# cloudflare-origin-pull-ca.pem  mealplanner.cameronmckay.ca.key  mealplanner.cameronmckay.ca.pem
-```
-
-> The `certs/` directory is gitignored — private keys must never be committed.
-
-Finally, enable **Authenticated Origin Pulls** in the Cloudflare dashboard so that only
-Cloudflare can reach your origin:
-
-1. Go to **SSL/TLS → Origin Server → Authenticated Origin Pulls**.
-2. Toggle it **On**.
-
-The repo includes Cloudflare's public Origin Pull CA certificate
-(`certs/cloudflare-origin-pull-ca.pem`). Caddy is configured to require and verify a client
-certificate signed by this CA on every TLS connection — requests that don't come through
-Cloudflare are rejected at the handshake.
-
-### 5. Run the app on the server
-
-From the copied repository root on the server:
-
-```bash
-docker compose up -d --build
-```
-
-This builds both images and starts the containers detached. The API mounts named volumes for the
-database (`/data`) and rotating pre-migration backups (`/backups`) so your household data survives
-container rebuilds and updates; both services use `restart: unless-stopped`, so they come back
-automatically after a reboot or crash. On first start the API creates the database directory,
-applies EF Core migrations, and enables WAL mode.
-
-Browse the app at **`https://mealplanner.cameronmckay.ca`** (Cloudflare proxied). Only **Caddy**
-publishes a host port (443); the **Web** and **API** containers are internal-only on the Docker
-network and cannot be reached directly from outside.
-
-To load representative **demo data** on a fresh install, set `MealPlanner__SeedDemoData: "true"` on
-the `api` service in [docker-compose.yml](docker-compose.yml) before the first `up` (seeding runs
-only when the database is empty). Leave it `"false"` to start clean.
-
-### 6. Manage, update, and view logs
-
-```bash
-docker compose ps                 # container status and health
-docker compose logs -f            # follow logs (add a service name to scope: api / web)
-docker compose down               # stop and remove containers (named volumes/data are kept)
-```
-
-#### Update from source (building locally)
-
-To deploy a new version after pulling code changes, rebuild and recreate in place — the data
-volumes are untouched:
-
-```bash
-git pull                          # or re-copy the repo
-VERSION=1.2.3 docker compose up -d --build   # versioned build
-```
-
-#### Update from pre-built images (recommended)
-
-If your deployment uses the pre-built GHCR images (see [Deploy from a release](#deploy-from-a-release)),
-pull the latest and replace the running containers:
-
-```bash
-docker compose pull               # pull the latest images from GHCR
-docker compose up -d              # recreate containers with the new images
-```
-
-The `VERSION` variable is baked into the published assemblies and displayed in the web UI (bottom of
-the sidebar). Omit it for a local dev build (`0.0.0-dev`).
-
-If the CNF CSV files are present in `data/cnf/` at build time, they are bundled into the API image
-so the deployment is fully self-contained. When absent, the image still builds and CNF search is
-simply hidden in the UI.
-
-> `aspire publish` can also generate an equivalent Compose project; the checked-in
-> [docker-compose.yml](docker-compose.yml) is the maintained home-deploy artifact.
+See the deployment guides for full setup instructions (secrets, TLS certificates, updates).
 
 ## Versioning & releases
 
@@ -433,56 +244,6 @@ The application version flows from one source:
 The Dockerfiles accept a `VERSION` build arg and pass it to `dotnet publish /p:Version=${VERSION}`.
 The web UI reads the assembly `InformationalVersion` at runtime and displays it at the bottom of the
 navigation drawer.
-
-### Deploy from a release
-
-Images are published to **GitHub Container Registry** (GHCR) on every release. Pull the latest
-images and start the stack:
-
-```bash
-docker compose pull               # pulls ghcr.io/cam96/mealplanner-api:latest and mealplanner-web:latest
-docker compose up -d              # starts containers from the pulled images
-```
-
-To pin a specific version:
-
-```bash
-VERSION=1.0.0 docker compose pull
-docker compose up -d
-```
-
-#### Update a running deployment to the latest release
-
-When a new release is published, pull the updated images and recreate the containers in place —
-existing data volumes are preserved:
-
-```bash
-docker compose pull               # fetches the newest :latest images from GHCR
-docker compose up -d              # recreates only containers whose image changed
-```
-
-This is zero-downtime for the data: named volumes (`mealplanner-data`, `mealplanner-backups`) are
-**not** removed. The API applies any pending EF Core migrations on startup (after backing up the
-database). If you want to force-recreate both containers even when the image hasn't changed:
-
-```bash
-docker compose up -d --force-recreate
-```
-
-#### Offline deployment from release tarballs
-
-Alternatively, download the image tarballs and deployment files from a
-[GitHub Release](https://github.com/cam96/MealPlanner/releases) for offline deployment:
-
-```bash
-gunzip MealPlanner-Api-1.0.0.tar.gz MealPlanner-Web-1.0.0.tar.gz
-docker load -i MealPlanner-Api-1.0.0.tar
-docker load -i MealPlanner-Web-1.0.0.tar
-docker compose up -d
-```
-
-Each release also includes the latest `docker-compose.yml` and `Caddyfile`, so you can update
-your deployment files without cloning the repo.
 
 ### GHCR privacy (maintainers)
 
@@ -546,4 +307,7 @@ Attribution shown in the UI: **"Canadian Nutrient File, Health Canada, 2015"**.
 
 - [Project plan](specs/meal-planner-plan.md)
 - [Architecture & diagrams](specs/architecture.md)
+- [Deploy locally](docs/deploy-local.md)
+- [Deploy to a home server](docs/deploy-home-server.md)
+- [Deploy to cloud / VPS](docs/deploy-cloud.md)
 - [Copilot project instructions](.github/copilot-instructions.md)
