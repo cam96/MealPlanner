@@ -41,6 +41,8 @@ services:
       args:
         VERSION: ${VERSION:-0.0.0-dev}
     image: ghcr.io/cam96/mealplanner-web:latest
+    ports:
+      - "8080:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
@@ -56,7 +58,8 @@ services:
     restart: unless-stopped
 
   # Reverse proxy — TLS termination with Cloudflare Origin Certificate.
-  # Only service with a published port; web and api are internal-only.
+  # Handles external HTTPS traffic; the web service also publishes port 8080 for
+  # direct HTTP access on the local network (http://localhost:8080).
   caddy:
     image: caddy:2-alpine
     ports:
