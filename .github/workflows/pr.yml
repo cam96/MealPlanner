@@ -24,5 +24,11 @@ jobs:
       - name: Build
         run: dotnet build --no-restore
 
-      - name: Test
-        run: dotnet test --no-build --verbosity normal
+      - name: Unit & Integration Tests
+        run: dotnet test tests/MealPlanner.Tests/MealPlanner.Tests.csproj --no-build --verbosity normal
+
+      - name: Install Playwright browsers
+        run: pwsh tests/MealPlanner.AcceptanceTests/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
+
+      - name: Acceptance Tests
+        run: dotnet test tests/MealPlanner.AcceptanceTests/MealPlanner.AcceptanceTests.csproj --no-build --verbosity normal
