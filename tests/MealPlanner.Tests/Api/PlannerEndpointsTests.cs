@@ -12,6 +12,8 @@ namespace MealPlanner.Tests.Api;
 [Category("Integration")]
 public sealed class PlannerEndpointsTests
 {
+    private static System.Text.Json.JsonSerializerOptions Json => ApiFixture.JsonOptions;
+
     private ApiFixture _fixture = null!;
     private HttpClient _client = null!;
     private TestDataBuilder _builder = null!;
@@ -50,10 +52,10 @@ public sealed class PlannerEndpointsTests
         var dayId = plan.Days[0].Id;
 
         var request = new SaveDayRequest(DayType.EatingOut, "Date night");
-        var response = await _client.PutAsJsonAsync($"/api/plans/days/{dayId}", request);
+        var response = await _client.PutAsJsonAsync($"/api/plans/days/{dayId}", request, Json);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var updatedPlan = await response.Content.ReadFromJsonAsync<MealPlanDto>();
+        var updatedPlan = await response.Content.ReadFromJsonAsync<MealPlanDto>(Json);
         var updatedDay = updatedPlan!.Days.Single(d => d.Id == dayId);
         Assert.That(updatedDay.DayType, Is.EqualTo(DayType.EatingOut));
         Assert.That(updatedDay.Note, Is.EqualTo("Date night"));
@@ -68,10 +70,10 @@ public sealed class PlannerEndpointsTests
 
         var request = new SavePlannedMealRequest(
             MealType.Dinner, MealAssignee.Shared, recipe.Id, null, 2);
-        var response = await _client.PostAsJsonAsync($"/api/plans/days/{dayId}/meals", request);
+        var response = await _client.PostAsJsonAsync($"/api/plans/days/{dayId}/meals", request, Json);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var updatedPlan = await response.Content.ReadFromJsonAsync<MealPlanDto>();
+        var updatedPlan = await response.Content.ReadFromJsonAsync<MealPlanDto>(Json);
         var day = updatedPlan!.Days.Single(d => d.Id == dayId);
         var meal = day.Meals.Single(m => m.RecipeId == recipe.Id);
         Assert.That(meal.Slot, Is.EqualTo(MealType.Dinner));
@@ -89,10 +91,10 @@ public sealed class PlannerEndpointsTests
 
         var updateRequest = new SavePlannedMealRequest(
             MealType.Lunch, MealAssignee.FirstPerson, recipe.Id, null, 1);
-        var response = await _client.PutAsJsonAsync($"/api/plans/meals/{meal.Id}", updateRequest);
+        var response = await _client.PutAsJsonAsync($"/api/plans/meals/{meal.Id}", updateRequest, Json);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var updatedPlan = await response.Content.ReadFromJsonAsync<MealPlanDto>();
+        var updatedPlan = await response.Content.ReadFromJsonAsync<MealPlanDto>(Json);
         var updated = updatedPlan!.Days.SelectMany(d => d.Meals).Single(m => m.Id == meal.Id);
         Assert.That(updated.Slot, Is.EqualTo(MealType.Lunch));
         Assert.That(updated.Assignee, Is.EqualTo(MealAssignee.FirstPerson));
