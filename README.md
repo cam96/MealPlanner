@@ -301,7 +301,26 @@ Copy the entire working tree to the server — the simplest options:
 You do **not** need to copy `bin/`, `obj/`, or any locally built database — those are rebuilt or
 created on the server. Named Docker volumes (not files in the repo) hold the live data.
 
-### 3. Run the app on the server
+### 3. Configure authentication secrets
+
+Create a `.env` file in the repository root on the server (next to `docker-compose.yml`):
+
+```bash
+cat > .env << 'EOF'
+JWT_SIGNING_KEY=<a-random-string-at-least-32-characters>
+GOOGLE_CLIENT_ID=<your-google-oauth-client-id>
+GOOGLE_CLIENT_SECRET=<your-google-oauth-client-secret>
+EOF
+chmod 600 .env
+```
+
+Docker Compose automatically reads `.env` and substitutes the values into the service environment
+variables. The containers will refuse to start if any of these are missing.
+
+> **Important:** Never commit `.env` to source control — it is already in `.gitignore`. On the
+> server, restrict file permissions (`chmod 600`) so only the deploying user can read it.
+
+### 4. Run the app on the server
 
 From the copied repository root on the server:
 
@@ -323,7 +342,7 @@ To load representative **demo data** on a fresh install, set `MealPlanner__SeedD
 the `api` service in [docker-compose.yml](docker-compose.yml) before the first `up` (seeding runs
 only when the database is empty). Leave it `"false"` to start clean.
 
-### 4. Manage, update, and view logs
+### 5. Manage, update, and view logs
 
 ```bash
 docker compose ps                 # container status and health
