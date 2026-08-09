@@ -113,3 +113,5 @@ jobs:
           files: |
             MealPlanner-Api-${{ steps.version.outputs.VERSION }}.tar.gz
             MealPlanner-Web-${{ steps.version.outputs.VERSION }}.tar.gz
+            docker-compose.yml
+            Caddyfile

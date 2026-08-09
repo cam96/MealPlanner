@@ -195,10 +195,12 @@ pending migrations, applies migrations, and enables WAL mode.
 
 ## Deploy to a home server (Docker Compose)
 
-The app is packaged as two small containers (**API** + **Web**) orchestrated by the checked-in
-[docker-compose.yml](docker-compose.yml), with a multi-stage Dockerfile per service. Because the
-images are built **from source inside Docker**, the server needs only Docker — no .NET SDK, no
-Aspire tooling, and no manual publish step. The whole stack comes up with a single command.
+The app is packaged as two small containers (**API** + **Web**) behind a **Caddy** reverse proxy,
+orchestrated by the checked-in [docker-compose.yml](docker-compose.yml), with a multi-stage
+Dockerfile per service. Caddy terminates TLS using a Cloudflare Origin Certificate so the app is
+served over HTTPS on port 443. Because the images are built **from source inside Docker**, the server
+needs only Docker — no .NET SDK, no Aspire tooling, and no manual publish step. The whole stack comes
+up with a single command.
 
 ### 1. Install on the server
 
@@ -250,7 +252,28 @@ Copy the entire working tree to the server — the simplest options:
 You do **not** need to copy `bin/`, `obj/`, or any locally built database — those are rebuilt or
 created on the server. Named Docker volumes (not files in the repo) hold the live data.
 
-### 3. Run the app on the server
+### 3. Set up the Cloudflare Origin Certificate
+
+The domain `mealplanner.cameronmckay.ca` is managed by Cloudflare with proxy mode (orange cloud)
+enabled. Cloudflare terminates TLS for visitors; the Origin Certificate secures the
+Cloudflare → origin connection.
+
+1. In the Cloudflare dashboard, go to **SSL/TLS → Origin Server → Create Certificate**.
+2. Choose **RSA (2048)**, enter `mealplanner.cameronmckay.ca` as the hostname, and set the
+   validity (up to 15 years).
+3. Save the **certificate** as `certs/origin.crt` and the **private key** as `certs/origin.key`
+   in the repository root on the server.
+
+```bash
+mkdir -p certs
+# paste/copy the cert and key files into this directory
+ls certs/
+# origin.crt  origin.key
+```
+
+> The `certs/` directory is gitignored — private keys must never be committed.
+
+### 4. Run the app on the server
 
 From the copied repository root on the server:
 
@@ -264,15 +287,15 @@ container rebuilds and updates; both services use `restart: unless-stopped`, so 
 automatically after a reboot or crash. On first start the API creates the database directory,
 applies EF Core migrations, and enables WAL mode.
 
-Browse the app at **`http://<server-ip>:8080`** from any device on the LAN. Only the **Web**
-container publishes a port (`8080`); the **API** is reached internally by the `api` service name via
-Aspire service-discovery configuration and is not exposed to the network.
+Browse the app at **`https://mealplanner.cameronmckay.ca`** (Cloudflare proxied). Only **Caddy**
+publishes a host port (443); the **Web** and **API** containers are internal-only on the Docker
+network and cannot be reached directly from outside.
 
 To load representative **demo data** on a fresh install, set `MealPlanner__SeedDemoData: "true"` on
 the `api` service in [docker-compose.yml](docker-compose.yml) before the first `up` (seeding runs
 only when the database is empty). Leave it `"false"` to start clean.
 
-### 4. Manage, update, and view logs
+### 5. Manage, update, and view logs
 
 ```bash
 docker compose ps                 # container status and health
@@ -367,7 +390,7 @@ docker compose up -d --force-recreate
 
 #### Offline deployment from release tarballs
 
-Alternatively, download the image tarballs from a
+Alternatively, download the image tarballs and deployment files from a
 [GitHub Release](https://github.com/cam96/MealPlanner/releases) for offline deployment:
 
 ```bash
@@ -377,8 +400,8 @@ docker load -i MealPlanner-Web-1.0.0.tar
 docker compose up -d
 ```
 
-Because the images are pre-built with the version already embedded, no source code or .NET SDK is
-needed on the server — just Docker.
+Each release also includes the latest `docker-compose.yml` and `Caddyfile`, so you can update
+your deployment files without cloning the repo.
 
 ### GHCR privacy (maintainers)
 
