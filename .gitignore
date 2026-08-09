@@ -56,3 +56,6 @@ certs/*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Bicep compiled output (deploy from .bicep source, not compiled ARM JSON)
+infra/*.json
