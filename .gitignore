@@ -50,7 +50,8 @@ data/backups/
 appsettings.*.local.json
 
 # TLS certificates (Cloudflare Origin Certificates — never commit private keys)
-certs/
+certs/*
+!certs/cloudflare-origin-pull-ca.pem
 
 # OS files
 .DS_Store

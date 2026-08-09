@@ -2,10 +2,10 @@
 # Add additional site blocks below to serve more domains from the same Caddy instance.
 
 mealplanner.cameronmckay.ca {
-	tls /etc/caddy/certs/origin.crt /etc/caddy/certs/origin.key {
+	tls /etc/caddy/certs/mealplanner.cameronmckay.ca.pem /etc/caddy/certs/mealplanner.cameronmckay.ca.key {
 		client_auth {
 			mode require_and_verify
-			trust_pool file /etc/caddy/cloudflare-origin-pull-ca.pem
+			trust_pool file /etc/caddy/certs/cloudflare-origin-pull-ca.pem
 		}
 	}
 	reverse_proxy web:8080
