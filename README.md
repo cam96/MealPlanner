@@ -273,6 +273,17 @@ ls certs/
 
 > The `certs/` directory is gitignored — private keys must never be committed.
 
+Finally, enable **Authenticated Origin Pulls** in the Cloudflare dashboard so that only
+Cloudflare can reach your origin:
+
+1. Go to **SSL/TLS → Origin Server → Authenticated Origin Pulls**.
+2. Toggle it **On**.
+
+The repo includes Cloudflare's public Origin Pull CA certificate
+(`cloudflare-origin-pull-ca.pem`). Caddy is configured to require and verify a client
+certificate signed by this CA on every TLS connection — requests that don't come through
+Cloudflare are rejected at the handshake.
+
 ### 4. Run the app on the server
 
 From the copied repository root on the server:
