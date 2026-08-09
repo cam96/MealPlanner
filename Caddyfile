@@ -1,0 +1,7 @@
+# MealPlanner reverse proxy — TLS termination for Cloudflare Origin traffic.
+# Add additional site blocks below to serve more domains from the same Caddy instance.
+
+mealplanner.cameronmckay.ca {
+	tls /etc/caddy/certs/origin.crt /etc/caddy/certs/origin.key
+	reverse_proxy web:8080
+}
