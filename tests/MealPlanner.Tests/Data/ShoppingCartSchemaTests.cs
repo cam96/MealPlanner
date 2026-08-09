@@ -14,6 +14,7 @@ public class ShoppingCartSchemaTests
 {
     private SqliteConnection _connection = default!;
     private MealPlannerDbContext _context = default!;
+    private int _testUserId;
 
     [SetUp]
     public async Task SetUpAsync()
@@ -26,6 +27,11 @@ public class ShoppingCartSchemaTests
             .Options;
         _context = new MealPlannerDbContext(options);
         await _context.Database.MigrateAsync();
+
+        var user = new AppUser { GoogleId = "test", Email = "test@test.com", Name = "Test", CreatedAt = DateTime.UtcNow, LastLoginAt = DateTime.UtcNow };
+        _context.AppUsers.Add(user);
+        await _context.SaveChangesAsync();
+        _testUserId = user.Id;
     }
 
     [TearDown]
@@ -40,6 +46,7 @@ public class ShoppingCartSchemaTests
     {
         _context.ManualShoppingItems.Add(new ManualShoppingItem
         {
+            AppUserId = _testUserId,
             Year = 2026,
             Month = 8,
             Name = "Paper towels",
@@ -69,6 +76,7 @@ public class ShoppingCartSchemaTests
     {
         _context.ManualShoppingItems.Add(new ManualShoppingItem
         {
+            AppUserId = _testUserId,
             Year = 2026,
             Month = 8,
             Name = "Dish soap",
@@ -93,6 +101,7 @@ public class ShoppingCartSchemaTests
     {
         _context.ManualShoppingItems.Add(new ManualShoppingItem
         {
+            AppUserId = _testUserId,
             Year = 2026,
             Month = 8,
             Name = "Sponges",
@@ -120,6 +129,7 @@ public class ShoppingCartSchemaTests
 
         _context.GeneratedItemCartEntries.Add(new GeneratedItemCartEntry
         {
+            AppUserId = _testUserId,
             Year = 2026,
             Month = 8,
             IngredientId = ingredient.Id,
@@ -151,6 +161,7 @@ public class ShoppingCartSchemaTests
 
         _context.GeneratedItemCartEntries.Add(new GeneratedItemCartEntry
         {
+            AppUserId = _testUserId,
             Year = 2026,
             Month = 8,
             IngredientId = ingredient.Id,
@@ -160,6 +171,7 @@ public class ShoppingCartSchemaTests
 
         _context.GeneratedItemCartEntries.Add(new GeneratedItemCartEntry
         {
+            AppUserId = _testUserId,
             Year = 2026,
             Month = 8,
             IngredientId = ingredient.Id,
@@ -178,6 +190,7 @@ public class ShoppingCartSchemaTests
 
         _context.GeneratedItemCartEntries.Add(new GeneratedItemCartEntry
         {
+            AppUserId = _testUserId,
             Year = 2026,
             Month = 8,
             IngredientId = ingredient.Id,
@@ -185,6 +198,7 @@ public class ShoppingCartSchemaTests
         });
         _context.GeneratedItemCartEntries.Add(new GeneratedItemCartEntry
         {
+            AppUserId = _testUserId,
             Year = 2026,
             Month = 9,
             IngredientId = ingredient.Id,
@@ -204,6 +218,7 @@ public class ShoppingCartSchemaTests
 
         _context.GeneratedItemCartEntries.Add(new GeneratedItemCartEntry
         {
+            AppUserId = _testUserId,
             Year = 2026,
             Month = 8,
             IngredientId = ingredient.Id,

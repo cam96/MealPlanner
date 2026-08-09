@@ -10,6 +10,12 @@ public class GeneratedItemCartEntry
     /// <summary>Gets the surrogate primary key.</summary>
     public int Id { get; set; }
 
+    /// <summary>Gets or sets the owning user's identifier.</summary>
+    public int AppUserId { get; set; }
+
+    /// <summary>Gets or sets the owning user. Populated by EF Core when included.</summary>
+    public AppUser? AppUser { get; set; }
+
     /// <summary>Gets or sets the calendar year of the shopping period.</summary>
     public int Year { get; set; }
 

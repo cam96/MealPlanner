@@ -20,6 +20,11 @@ public sealed class PantryItemConfiguration : IEntityTypeConfiguration<PantryIte
             .HasConversion<string>()
             .HasMaxLength(20);
 
+        builder.HasOne(p => p.AppUser)
+            .WithMany(u => u.PantryItems)
+            .HasForeignKey(p => p.AppUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // Deleting an ingredient still stocked in the pantry should be blocked rather than silently
         // removing inventory records.
         builder.HasOne(p => p.Ingredient)
@@ -27,6 +32,6 @@ public sealed class PantryItemConfiguration : IEntityTypeConfiguration<PantryIte
             .HasForeignKey(p => p.IngredientId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(p => new { p.IngredientId, p.Location });
+        builder.HasIndex(p => new { p.AppUserId, p.IngredientId, p.Location });
     }
 }

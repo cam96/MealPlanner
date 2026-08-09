@@ -25,4 +25,19 @@ public class AppUser
 
     /// <summary>Gets the collection of roles assigned to this user.</summary>
     public ICollection<AppUserRole> UserRoles { get; set; } = [];
+
+    /// <summary>Gets the meal plans owned by this user.</summary>
+    public ICollection<MealPlan> MealPlans { get; } = [];
+
+    /// <summary>Gets the household members defined by this user.</summary>
+    public ICollection<Person> People { get; } = [];
+
+    /// <summary>Gets the pantry items owned by this user.</summary>
+    public ICollection<PantryItem> PantryItems { get; } = [];
+
+    /// <summary>Gets the manual shopping items created by this user.</summary>
+    public ICollection<ManualShoppingItem> ManualShoppingItems { get; } = [];
+
+    /// <summary>Gets the generated cart entries for this user.</summary>
+    public ICollection<GeneratedItemCartEntry> GeneratedItemCartEntries { get; } = [];
 }

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using MealPlanner.Api.Mapping;
 using MealPlanner.Contracts.People;
 using MealPlanner.Data;
@@ -30,11 +31,15 @@ public static class PeopleEndpoints
     }
 
     private static async Task<Ok<IReadOnlyList<PersonDto>>> GetAllAsync(
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var userId = user.GetAppUserId();
+
         var people = await db.People
             .AsNoTracking()
+            .Where(p => p.AppUserId == userId)
             .OrderBy(p => p.Name)
             .Select(p => p.ToDto())
             .ToListAsync(cancellationToken);
@@ -44,18 +49,22 @@ public static class PeopleEndpoints
 
     private static async Task<Results<Ok<PersonDto>, NotFound>> GetByIdAsync(
         int id,
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var userId = user.GetAppUserId();
+
         var person = await db.People
             .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(p => p.Id == id && p.AppUserId == userId, cancellationToken);
 
         return person is null ? TypedResults.NotFound() : TypedResults.Ok(person.ToDto());
     }
 
     private static async Task<Results<Created<PersonDto>, ValidationProblem>> CreateAsync(
         SavePersonRequest request,
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
@@ -64,7 +73,9 @@ public static class PeopleEndpoints
             return TypedResults.ValidationProblem(errors);
         }
 
-        var person = new Person { Name = request.Name.Trim() };
+        var userId = user.GetAppUserId();
+
+        var person = new Person { Name = request.Name.Trim(), AppUserId = userId };
         person.Apply(request);
 
         db.People.Add(person);
@@ -76,6 +87,7 @@ public static class PeopleEndpoints
     private static async Task<Results<Ok<PersonDto>, NotFound, ValidationProblem>> UpdateAsync(
         int id,
         SavePersonRequest request,
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
@@ -84,7 +96,8 @@ public static class PeopleEndpoints
             return TypedResults.ValidationProblem(errors);
         }
 
-        var person = await db.People.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        var userId = user.GetAppUserId();
+        var person = await db.People.FirstOrDefaultAsync(p => p.Id == id && p.AppUserId == userId, cancellationToken);
         if (person is null)
         {
             return TypedResults.NotFound();
@@ -98,10 +111,12 @@ public static class PeopleEndpoints
 
     private static async Task<Results<NoContent, NotFound>> DeleteAsync(
         int id,
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
-        var person = await db.People.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        var userId = user.GetAppUserId();
+        var person = await db.People.FirstOrDefaultAsync(p => p.Id == id && p.AppUserId == userId, cancellationToken);
         if (person is null)
         {
             return TypedResults.NotFound();

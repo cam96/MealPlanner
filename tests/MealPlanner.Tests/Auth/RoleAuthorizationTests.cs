@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using MealPlanner.Contracts.Auth;
+using MealPlanner.ServiceDefaults.Authorization;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.IdentityModel.Tokens;
 
@@ -21,9 +22,10 @@ public sealed class RoleAuthorizationTests
 
     private WebApplicationFactory<Program> _factory = null!;
     private string _dbPath = null!;
+    private int _testUserId;
 
     [OneTimeSetUp]
-    public void OneTimeSetUp()
+    public async Task OneTimeSetUp()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"mealplanner_role_test_{Guid.NewGuid():N}.db");
 
@@ -33,6 +35,12 @@ public sealed class RoleAuthorizationTests
                 builder.UseSetting("Authentication:Jwt:Key", JwtKey);
                 builder.UseSetting("ConnectionStrings:mealplanner", $"Data Source={_dbPath}");
             });
+
+        // Provision the test user so endpoints can resolve the app_user_id claim.
+        using var client = CreateClientWithoutUserId();
+        var response = await client.PostAsync("/api/auth/ensure-user", null);
+        var result = await response.Content.ReadFromJsonAsync<UserRolesResponse>();
+        _testUserId = result!.UserId;
     }
 
     [OneTimeTearDown]
@@ -40,9 +48,11 @@ public sealed class RoleAuthorizationTests
     {
         _factory.Dispose();
 
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
         if (File.Exists(_dbPath))
         {
-            File.Delete(_dbPath);
+            try { File.Delete(_dbPath); } catch (IOException) { }
         }
     }
 
@@ -170,11 +180,22 @@ public sealed class RoleAuthorizationTests
             AllowAutoRedirect = false,
         });
         client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", GenerateToken(roles));
+            new AuthenticationHeaderValue("Bearer", GenerateToken(_testUserId, roles));
         return client;
     }
 
-    private static string GenerateToken(params string[] roles)
+    private HttpClient CreateClientWithoutUserId(params string[] roles)
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+        });
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", GenerateToken(appUserId: null, roles));
+        return client;
+    }
+
+    private static string GenerateToken(int? appUserId, params string[] roles)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JwtKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -185,6 +206,11 @@ public sealed class RoleAuthorizationTests
             new(JwtRegisteredClaimNames.Name, "Role Test User"),
             new(JwtRegisteredClaimNames.Email, "roletest@example.com"),
         };
+
+        if (appUserId.HasValue)
+        {
+            claims.Add(new Claim(MealPlannerClaimTypes.AppUserId, appUserId.Value.ToString()));
+        }
 
         foreach (var role in roles)
         {

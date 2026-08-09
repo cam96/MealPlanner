@@ -14,6 +14,7 @@ public class FoodCategoryAndComboTests
 {
     private SqliteConnection _connection = default!;
     private MealPlannerDbContext _context = default!;
+    private int _testUserId;
 
     [SetUp]
     public async Task SetUpAsync()
@@ -27,6 +28,11 @@ public class FoodCategoryAndComboTests
             .Options;
         _context = new MealPlannerDbContext(options);
         await _context.Database.MigrateAsync();
+
+        var user = new AppUser { GoogleId = "test", Email = "test@test.com", Name = "Test", CreatedAt = DateTime.UtcNow, LastLoginAt = DateTime.UtcNow };
+        _context.AppUsers.Add(user);
+        await _context.SaveChangesAsync();
+        _testUserId = user.Id;
     }
 
     [TearDown]
@@ -139,7 +145,7 @@ public class FoodCategoryAndComboTests
         _context.MealCombos.Add(combo);
         await _context.SaveChangesAsync();
 
-        var plan = new MealPlan { Year = 2026, Month = 1 };
+        var plan = new MealPlan { AppUserId = _testUserId, Year = 2026, Month = 1 };
         var day = new DayPlan { Date = new DateOnly(2026, 1, 5), DayType = DayType.Normal };
         day.Meals.Add(new PlannedMeal
         {
@@ -166,7 +172,7 @@ public class FoodCategoryAndComboTests
         _context.MealCombos.Add(combo);
         await _context.SaveChangesAsync();
 
-        var plan = new MealPlan { Year = 2026, Month = 2 };
+        var plan = new MealPlan { AppUserId = _testUserId, Year = 2026, Month = 2 };
         var day = new DayPlan { Date = new DateOnly(2026, 2, 3), DayType = DayType.Normal };
         day.Meals.Add(new PlannedMeal
         {

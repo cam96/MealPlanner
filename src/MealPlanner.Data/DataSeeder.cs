@@ -34,9 +34,25 @@ public static class DataSeeder
 
         logger.LogInformation("Seeding demo data (empty database detected).");
 
+        // Ensure a demo user exists to own the seeded data.
+        var demoUser = await context.AppUsers.FirstOrDefaultAsync(cancellationToken);
+        if (demoUser is null)
+        {
+            demoUser = new AppUser
+            {
+                GoogleId = "demo-seed-user",
+                Email = "demo@mealplanner.local",
+                Name = "Demo User",
+                CreatedAt = DateTime.UtcNow,
+                LastLoginAt = DateTime.UtcNow,
+            };
+            context.AppUsers.Add(demoUser);
+            await context.SaveChangesAsync(cancellationToken);
+        }
+
         context.People.AddRange(
-            new Person { Name = "Me", DailyCalorieGoal = 2200, DailyProteinGoal = 130, DailyFiberGoal = 35, DailyCarbGoal = 250, DailyFatGoal = 70 },
-            new Person { Name = "Michelle", DailyCalorieGoal = 1900, DailyProteinGoal = 110, DailyFiberGoal = 30, DailyCarbGoal = 210, DailyFatGoal = 60 });
+            new Person { Name = "Me", AppUserId = demoUser.Id, DailyCalorieGoal = 2200, DailyProteinGoal = 130, DailyFiberGoal = 35, DailyCarbGoal = 250, DailyFatGoal = 70 },
+            new Person { Name = "Michelle", AppUserId = demoUser.Id, DailyCalorieGoal = 1900, DailyProteinGoal = 110, DailyFiberGoal = 30, DailyCarbGoal = 210, DailyFatGoal = 60 });
 
         var oats = new Ingredient { Name = "Rolled oats", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Carbohydrate, CaloriesPer100 = 379, ProteinPer100 = 13, FiberPer100 = 10, CarbsPer100 = 67, FatPer100 = 7 };
         var chicken = new Ingredient { Name = "Chicken breast", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Protein, CaloriesPer100 = 165, ProteinPer100 = 31, FiberPer100 = 0, CarbsPer100 = 0, FatPer100 = 4 };
@@ -102,9 +118,9 @@ public static class DataSeeder
             });
 
         context.PantryItems.AddRange(
-            new PantryItem { Ingredient = rice, QuantityOnHand = 900, Unit = MeasurementUnit.Gram, Location = StorageLocation.Pantry },
-            new PantryItem { Ingredient = oats, QuantityOnHand = 500, Unit = MeasurementUnit.Gram, Location = StorageLocation.Pantry },
-            new PantryItem { Ingredient = chicken, QuantityOnHand = 500, Unit = MeasurementUnit.Gram, Location = StorageLocation.Freezer });
+            new PantryItem { Ingredient = rice, AppUserId = demoUser.Id, QuantityOnHand = 900, Unit = MeasurementUnit.Gram, Location = StorageLocation.Pantry },
+            new PantryItem { Ingredient = oats, AppUserId = demoUser.Id, QuantityOnHand = 500, Unit = MeasurementUnit.Gram, Location = StorageLocation.Pantry },
+            new PantryItem { Ingredient = chicken, AppUserId = demoUser.Id, QuantityOnHand = 500, Unit = MeasurementUnit.Gram, Location = StorageLocation.Freezer });
 
         context.MealCombos.Add(new MealCombo
         {

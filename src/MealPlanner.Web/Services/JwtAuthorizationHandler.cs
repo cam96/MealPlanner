@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
 using System.Security.Claims;
+using MealPlanner.ServiceDefaults.Authorization;
 using Microsoft.IdentityModel.Tokens;
 
 namespace MealPlanner.Web.Services;
@@ -53,6 +54,13 @@ public sealed class JwtAuthorizationHandler : DelegatingHandler
             new(JwtRegisteredClaimNames.Name, user.FindFirstValue(ClaimTypes.Name) ?? ""),
             new(JwtRegisteredClaimNames.Email, user.FindFirstValue(ClaimTypes.Email) ?? ""),
         };
+
+        // Include the database user ID so the API can filter data by user.
+        var appUserId = user.FindFirstValue(MealPlannerClaimTypes.AppUserId);
+        if (!string.IsNullOrEmpty(appUserId))
+        {
+            claims.Add(new Claim(MealPlannerClaimTypes.AppUserId, appUserId));
+        }
 
         // Include all role claims so the API can enforce role-based authorization policies.
         foreach (var roleClaim in user.FindAll(ClaimTypes.Role))
