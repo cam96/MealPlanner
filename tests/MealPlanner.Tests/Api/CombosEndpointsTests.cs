@@ -97,7 +97,7 @@ public sealed class CombosEndpointsTests
     {
         var combo = await _builder.CreateComboAsync("Before", _protein.Id);
 
-        var updateRequest = new SaveMealComboRequest("After", _carb.Id, null, _vegetable.Id);
+        var updateRequest = new SaveMealComboRequest("After", _protein.Id, _carb.Id, _vegetable.Id);
         var response = await _client.PutAsJsonAsync($"/api/combos/{combo.Id}", updateRequest, Json);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -106,9 +106,9 @@ public sealed class CombosEndpointsTests
     }
 
     [Test]
-    public async Task DeleteCombo_ReturnsOk_WhenExists()
+    public async Task DeleteCombo_ReturnsNoContent_WhenExists()
     {
-        var combo = await _builder.CreateComboAsync("To Delete");
+        var combo = await _builder.CreateComboAsync("To Delete", _protein.Id);
 
         var response = await _client.DeleteAsync($"/api/combos/{combo.Id}");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));

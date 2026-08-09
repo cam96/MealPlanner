@@ -83,7 +83,8 @@ public sealed class PricesEndpointsTests
         var updateRequest = new SaveIngredientPriceRequest(
             _store.Id, 6.49m, 600, MeasurementUnit.Gram,
             DateOnly.FromDateTime(DateTime.Today), false, true);
-        var response = await _client.PutAsJsonAsync($"/api/prices/{price.Id}", updateRequest, Json);
+        var response = await _client.PutAsJsonAsync(
+            $"/api/ingredients/{ingredient.Id}/prices/{price.Id}", updateRequest, Json);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var updated = await response.Content.ReadFromJsonAsync<IngredientPriceDto>(Json);
@@ -97,7 +98,8 @@ public sealed class PricesEndpointsTests
         var ingredient = await _builder.CreateIngredientAsync("Delete Price Ingredient");
         var price = await _builder.CreatePriceAsync(ingredient.Id, _store.Id, 2.99m, 200);
 
-        var response = await _client.DeleteAsync($"/api/prices/{price.Id}");
+        var response = await _client.DeleteAsync(
+            $"/api/ingredients/{ingredient.Id}/prices/{price.Id}");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
     }

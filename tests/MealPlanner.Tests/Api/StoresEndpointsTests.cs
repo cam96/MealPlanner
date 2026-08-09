@@ -39,14 +39,14 @@ public sealed class StoresEndpointsTests
     [Test]
     public async Task CreateStore_ReturnsCreated_WithValidName()
     {
-        var request = new SaveStoreRequest("Costco");
+        var request = new SaveStoreRequest("Walmart");
         var response = await _client.PostAsJsonAsync("/api/stores", request, Json);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
         var store = await response.Content.ReadFromJsonAsync<StoreDto>(Json);
         Assert.That(store, Is.Not.Null);
-        Assert.That(store!.Name, Is.EqualTo("Costco"));
+        Assert.That(store!.Name, Is.EqualTo("Walmart"));
         Assert.That(store.Id, Is.GreaterThan(0));
     }
 
@@ -71,13 +71,13 @@ public sealed class StoresEndpointsTests
     [Test]
     public async Task GetById_ReturnsStore_WhenExists()
     {
-        var createResponse = await _client.PostAsJsonAsync("/api/stores", new SaveStoreRequest("Superstore"), Json);
+        var createResponse = await _client.PostAsJsonAsync("/api/stores", new SaveStoreRequest("FreshCo"), Json);
         var created = await createResponse.Content.ReadFromJsonAsync<StoreDto>(Json);
 
         var store = await _client.GetFromJsonAsync<StoreDto>($"/api/stores/{created!.Id}", Json);
 
         Assert.That(store, Is.Not.Null);
-        Assert.That(store!.Name, Is.EqualTo("Superstore"));
+        Assert.That(store!.Name, Is.EqualTo("FreshCo"));
     }
 
     [Test]
