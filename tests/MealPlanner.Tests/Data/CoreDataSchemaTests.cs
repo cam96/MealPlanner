@@ -14,6 +14,7 @@ public class CoreDataSchemaTests
 {
     private SqliteConnection _connection = default!;
     private MealPlannerDbContext _context = default!;
+    private int _testUserId;
 
     [SetUp]
     public async Task SetUpAsync()
@@ -27,6 +28,11 @@ public class CoreDataSchemaTests
             .Options;
         _context = new MealPlannerDbContext(options);
         await _context.Database.MigrateAsync();
+
+        var user = new AppUser { GoogleId = "test", Email = "test@test.com", Name = "Test", CreatedAt = DateTime.UtcNow, LastLoginAt = DateTime.UtcNow };
+        _context.AppUsers.Add(user);
+        await _context.SaveChangesAsync();
+        _testUserId = user.Id;
     }
 
     [TearDown]
@@ -105,6 +111,7 @@ public class CoreDataSchemaTests
 
         _context.PantryItems.Add(new PantryItem
         {
+            AppUserId = _testUserId,
             IngredientId = ingredient.Id,
             QuantityOnHand = 750,
             Unit = MeasurementUnit.Gram,
@@ -132,6 +139,7 @@ public class CoreDataSchemaTests
 
         _context.PantryItems.Add(new PantryItem
         {
+            AppUserId = _testUserId,
             IngredientId = ingredient.Id,
             QuantityOnHand = 4,
             Unit = MeasurementUnit.Each,

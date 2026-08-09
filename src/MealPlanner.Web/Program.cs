@@ -86,6 +86,10 @@ builder.Services.AddAuthentication(options =>
                     var rolesResponse = await response.Content.ReadFromJsonAsync<UserRolesResponse>();
                     if (rolesResponse?.Roles is not null)
                     {
+                        identity.AddClaim(new Claim(
+                            MealPlannerClaimTypes.AppUserId,
+                            rolesResponse.UserId.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+
                         foreach (var role in rolesResponse.Roles)
                         {
                             identity.AddClaim(new Claim(ClaimTypes.Role, role));

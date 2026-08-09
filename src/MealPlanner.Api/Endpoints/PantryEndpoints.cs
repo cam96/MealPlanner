@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using MealPlanner.Api.Mapping;
 using MealPlanner.Contracts.Pantry;
 using MealPlanner.Data;
@@ -30,12 +31,16 @@ public static class PantryEndpoints
     }
 
     private static async Task<Ok<IReadOnlyList<PantryItemDto>>> GetAllAsync(
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var userId = user.GetAppUserId();
+
         var items = await db.PantryItems
             .AsNoTracking()
             .Include(p => p.Ingredient)
+            .Where(p => p.AppUserId == userId)
             .OrderBy(p => p.Location)
             .ThenBy(p => p.Ingredient!.Name)
             .Select(p => p.ToDto())
@@ -46,19 +51,23 @@ public static class PantryEndpoints
 
     private static async Task<Results<Ok<PantryItemDto>, NotFound>> GetByIdAsync(
         int id,
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var userId = user.GetAppUserId();
+
         var item = await db.PantryItems
             .AsNoTracking()
             .Include(p => p.Ingredient)
-            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(p => p.Id == id && p.AppUserId == userId, cancellationToken);
 
         return item is null ? TypedResults.NotFound() : TypedResults.Ok(item.ToDto());
     }
 
     private static async Task<Results<Created<PantryItemDto>, ValidationProblem>> CreateAsync(
         SavePantryItemRequest request,
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
@@ -67,7 +76,9 @@ public static class PantryEndpoints
             return TypedResults.ValidationProblem(errors);
         }
 
-        var item = new PantryItem();
+        var userId = user.GetAppUserId();
+
+        var item = new PantryItem { AppUserId = userId };
         item.Apply(request);
 
         db.PantryItems.Add(item);
@@ -80,10 +91,12 @@ public static class PantryEndpoints
     private static async Task<Results<Ok<PantryItemDto>, NotFound, ValidationProblem>> UpdateAsync(
         int id,
         SavePantryItemRequest request,
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
-        var item = await db.PantryItems.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        var userId = user.GetAppUserId();
+        var item = await db.PantryItems.FirstOrDefaultAsync(p => p.Id == id && p.AppUserId == userId, cancellationToken);
         if (item is null)
         {
             return TypedResults.NotFound();
@@ -103,10 +116,12 @@ public static class PantryEndpoints
 
     private static async Task<Results<NoContent, NotFound>> DeleteAsync(
         int id,
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
-        var item = await db.PantryItems.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        var userId = user.GetAppUserId();
+        var item = await db.PantryItems.FirstOrDefaultAsync(p => p.Id == id && p.AppUserId == userId, cancellationToken);
         if (item is null)
         {
             return TypedResults.NotFound();

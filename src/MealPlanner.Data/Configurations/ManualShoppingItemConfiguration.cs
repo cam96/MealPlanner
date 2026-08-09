@@ -20,11 +20,16 @@ public sealed class ManualShoppingItemConfiguration : IEntityTypeConfiguration<M
             .HasConversion<string>()
             .HasMaxLength(20);
 
+        builder.HasOne(m => m.AppUser)
+            .WithMany(u => u.ManualShoppingItems)
+            .HasForeignKey(m => m.AppUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasOne(m => m.Ingredient)
             .WithMany()
             .HasForeignKey(m => m.IngredientId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        builder.HasIndex(m => new { m.Year, m.Month });
+        builder.HasIndex(m => new { m.AppUserId, m.Year, m.Month });
     }
 }

@@ -9,6 +9,12 @@ public class PantryItem
     /// <summary>Gets the surrogate primary key.</summary>
     public int Id { get; set; }
 
+    /// <summary>Gets or sets the owning user's identifier.</summary>
+    public int AppUserId { get; set; }
+
+    /// <summary>Gets or sets the owning user. Populated by EF Core when included.</summary>
+    public AppUser? AppUser { get; set; }
+
     /// <summary>Gets or sets the identifier of the ingredient held.</summary>
     public int IngredientId { get; set; }
 

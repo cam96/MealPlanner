@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using MealPlanner.Api.Mapping;
 using MealPlanner.Contracts.Shopping;
 using MealPlanner.Data;
@@ -37,6 +38,7 @@ public static class ShoppingEndpoints
     private static async Task<Results<Ok<ShoppingListDto>, ValidationProblem>> GetAsync(
         int year,
         int month,
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
@@ -48,13 +50,14 @@ public static class ShoppingEndpoints
             });
         }
 
+        var userId = user.GetAppUserId();
         var budget = await SettingsEndpoints.GetMonthlyBudgetAsync(db, cancellationToken);
 
         // Load manual items for this month with their linked ingredients.
         var manualEntities = await db.ManualShoppingItems
             .AsNoTracking()
             .Include(m => m.Ingredient)
-            .Where(m => m.Year == year && m.Month == month)
+            .Where(m => m.AppUserId == userId && m.Year == year && m.Month == month)
             .OrderBy(m => m.CreatedAt)
             .ToListAsync(cancellationToken);
 
@@ -188,6 +191,7 @@ public static class ShoppingEndpoints
         int year,
         int month,
         AddManualShoppingItemRequest request,
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
@@ -219,8 +223,11 @@ public static class ShoppingEndpoints
             return TypedResults.ValidationProblem(errors);
         }
 
+        var userId = user.GetAppUserId();
+
         var item = new ManualShoppingItem
         {
+            AppUserId = userId,
             Year = year,
             Month = month,
             CreatedAt = DateTime.UtcNow,
@@ -259,11 +266,14 @@ public static class ShoppingEndpoints
         int month,
         int id,
         AddManualShoppingItemRequest request,
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var userId = user.GetAppUserId();
+
         var item = await db.ManualShoppingItems
-            .FirstOrDefaultAsync(m => m.Id == id && m.Year == year && m.Month == month, cancellationToken);
+            .FirstOrDefaultAsync(m => m.Id == id && m.AppUserId == userId && m.Year == year && m.Month == month, cancellationToken);
 
         if (item is null)
         {
@@ -303,11 +313,14 @@ public static class ShoppingEndpoints
         int year,
         int month,
         int id,
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var userId = user.GetAppUserId();
+
         var item = await db.ManualShoppingItems
-            .FirstOrDefaultAsync(m => m.Id == id && m.Year == year && m.Month == month, cancellationToken);
+            .FirstOrDefaultAsync(m => m.Id == id && m.AppUserId == userId && m.Year == year && m.Month == month, cancellationToken);
 
         if (item is null)
         {
@@ -324,11 +337,14 @@ public static class ShoppingEndpoints
         int year,
         int month,
         int id,
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var userId = user.GetAppUserId();
+
         var item = await db.ManualShoppingItems
-            .FirstOrDefaultAsync(m => m.Id == id && m.Year == year && m.Month == month, cancellationToken);
+            .FirstOrDefaultAsync(m => m.Id == id && m.AppUserId == userId && m.Year == year && m.Month == month, cancellationToken);
 
         if (item is null)
         {
@@ -344,12 +360,15 @@ public static class ShoppingEndpoints
     private static async Task<NoContent> ClearCartAsync(
         int year,
         int month,
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var userId = user.GetAppUserId();
+
         // Remove manual items that are in the cart (they've been purchased).
         await db.ManualShoppingItems
-            .Where(m => m.Year == year && m.Month == month && m.IsInCart)
+            .Where(m => m.AppUserId == userId && m.Year == year && m.Month == month && m.IsInCart)
             .ExecuteDeleteAsync(cancellationToken);
 
         return TypedResults.NoContent();

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using MealPlanner.Contracts.Reporting;
 using MealPlanner.Data;
 using MealPlanner.Domain.Entities;
@@ -28,6 +29,7 @@ public static class DashboardEndpoints
     private static async Task<Results<Ok<DashboardDto>, ValidationProblem>> GetAsync(
         int year,
         int month,
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
@@ -39,10 +41,12 @@ public static class DashboardEndpoints
             });
         }
 
+        var userId = user.GetAppUserId();
         var budget = await SettingsEndpoints.GetMonthlyBudgetAsync(db, cancellationToken);
 
         var people = await db.People
             .AsNoTracking()
+            .Where(p => p.AppUserId == userId)
             .OrderBy(p => p.Id)
             .ToListAsync(cancellationToken);
 
@@ -53,12 +57,13 @@ public static class DashboardEndpoints
                     .ThenInclude(m => m.Recipe!)
                         .ThenInclude(r => r.Ingredients)
                             .ThenInclude(ri => ri.Ingredient)
-            .FirstOrDefaultAsync(p => p.Year == year && p.Month == month, cancellationToken)
+            .FirstOrDefaultAsync(p => p.AppUserId == userId && p.Year == year && p.Month == month, cancellationToken)
             ?? new MealPlan { Year = year, Month = month };
 
         var pantry = await db.PantryItems
             .AsNoTracking()
             .Include(p => p.Ingredient)
+            .Where(p => p.AppUserId == userId)
             .ToListAsync(cancellationToken);
 
         var prices = await db.IngredientPrices

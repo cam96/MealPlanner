@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using MealPlanner.Api.Mapping;
 using MealPlanner.Contracts.Combos;
 using MealPlanner.Data;
@@ -33,9 +34,12 @@ public static class CombosEndpoints
     }
 
     private static async Task<Ok<CategoryBoardDto>> GetBoardAsync(
+        ClaimsPrincipal user,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var userId = user.GetAppUserId();
+
         var ingredients = await db.Ingredients
             .AsNoTracking()
             .Where(i => i.Category != FoodCategory.None)
@@ -45,7 +49,7 @@ public static class CombosEndpoints
         var ids = ingredients.Select(i => i.Id).ToList();
         var stock = await db.PantryItems
             .AsNoTracking()
-            .Where(p => ids.Contains(p.IngredientId))
+            .Where(p => p.AppUserId == userId && ids.Contains(p.IngredientId))
             .ToListAsync(cancellationToken);
 
         var stockByIngredient = stock
