@@ -261,17 +261,28 @@ Cloudflare → origin connection.
 1. In the Cloudflare dashboard, go to **SSL/TLS → Origin Server → Create Certificate**.
 2. Choose **RSA (2048)**, enter `mealplanner.cameronmckay.ca` as the hostname, and set the
    validity (up to 15 years).
-3. Save the **certificate** as `certs/origin.crt` and the **private key** as `certs/origin.key`
-   in the repository root on the server.
+3. Save the **certificate** as `certs/mealplanner.cameronmckay.ca.pem` and the **private key** as
+   `certs/mealplanner.cameronmckay.ca.key` in the repository root on the server.
 
 ```bash
 mkdir -p certs
 # paste/copy the cert and key files into this directory
 ls certs/
-# origin.crt  origin.key
+# cloudflare-origin-pull-ca.pem  mealplanner.cameronmckay.ca.key  mealplanner.cameronmckay.ca.pem
 ```
 
 > The `certs/` directory is gitignored — private keys must never be committed.
+
+Finally, enable **Authenticated Origin Pulls** in the Cloudflare dashboard so that only
+Cloudflare can reach your origin:
+
+1. Go to **SSL/TLS → Origin Server → Authenticated Origin Pulls**.
+2. Toggle it **On**.
+
+The repo includes Cloudflare's public Origin Pull CA certificate
+(`certs/cloudflare-origin-pull-ca.pem`). Caddy is configured to require and verify a client
+certificate signed by this CA on every TLS connection — requests that don't come through
+Cloudflare are rejected at the handshake.
 
 ### 4. Run the app on the server
 
