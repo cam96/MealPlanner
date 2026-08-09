@@ -390,7 +390,7 @@ docker compose up -d --force-recreate
 
 #### Offline deployment from release tarballs
 
-Alternatively, download the image tarballs from a
+Alternatively, download the image tarballs and deployment files from a
 [GitHub Release](https://github.com/cam96/MealPlanner/releases) for offline deployment:
 
 ```bash
@@ -400,8 +400,8 @@ docker load -i MealPlanner-Web-1.0.0.tar
 docker compose up -d
 ```
 
-Because the images are pre-built with the version already embedded, no source code or .NET SDK is
-needed on the server — just Docker.
+Each release also includes the latest `docker-compose.yml` and `Caddyfile`, so you can update
+your deployment files without cloning the repo.
 
 ### GHCR privacy (maintainers)
 
