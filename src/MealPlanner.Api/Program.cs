@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using MealPlanner.Api.Endpoints;
 using MealPlanner.Data;
+using MealPlanner.ServiceDefaults.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,9 +36,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = "MealPlanner.Web",
             ValidAudience = "MealPlanner.Api",
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            RoleClaimType = System.Security.Claims.ClaimTypes.Role,
         };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddMealPlannerAuthorization();
 
 // API surface.
 builder.Services.AddOpenApi();
@@ -109,5 +111,9 @@ app.MapDashboardEndpoints();
 
 // Canadian Nutrient File search-to-populate for ingredient nutrition.
 app.MapCnfEndpoints();
+
+// Authentication and user management.
+app.MapAuthEndpoints();
+app.MapUsersEndpoints();
 
 app.Run();

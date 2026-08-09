@@ -5,6 +5,7 @@ using MealPlanner.Domain.Entities;
 using MealPlanner.Domain.Nutrition;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using MealPlanner.ServiceDefaults.Authorization;
 
 namespace MealPlanner.Api.Endpoints;
 
@@ -19,7 +20,7 @@ public static class ShoppingEndpoints
         ArgumentNullException.ThrowIfNull(app);
 
         var group = app.MapGroup("/api/plans/{year:int}/{month:int}/shopping-list")
-            .WithTags("Shopping").RequireAuthorization();
+            .WithTags("Shopping").RequireAuthorization(AuthorizationPolicies.User);
 
         group.MapGet("/", GetAsync);
 

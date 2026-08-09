@@ -4,6 +4,7 @@ using MealPlanner.Data;
 using MealPlanner.Domain.Entities;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using MealPlanner.ServiceDefaults.Authorization;
 
 namespace MealPlanner.Api.Endpoints;
 
@@ -17,14 +18,14 @@ public static class PricesEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/ingredients/{ingredientId:int}/prices").WithTags("Prices").RequireAuthorization();
+        var group = app.MapGroup("/api/ingredients/{ingredientId:int}/prices").WithTags("Prices").RequireAuthorization(AuthorizationPolicies.User);
 
         group.MapGet("/", GetAllAsync);
         group.MapPost("/", CreateAsync);
         group.MapPut("/{priceId:int}", UpdateAsync);
         group.MapDelete("/{priceId:int}", DeleteAsync);
 
-        var flat = app.MapGroup("/api/prices").WithTags("Prices").RequireAuthorization();
+        var flat = app.MapGroup("/api/prices").WithTags("Prices").RequireAuthorization(AuthorizationPolicies.User);
         flat.MapGet("/recent", GetRecentAsync);
 
         return app;

@@ -1,0 +1,94 @@
+@page "/users"
+@attribute [Authorize(Policy = "Admin")]
+@using MealPlanner.Contracts.Auth
+@using MealPlanner.ServiceDefaults.Authorization
+@using MealPlanner.Web.Components.Dialogs
+@inject MealPlannerApiClient Api
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Users - MealPlanner</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-2 d-none d-sm-block">User management</MudText>
+
+<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+    Manage user accounts and their role assignments. Changes take effect on the user's next login.
+</MudText>
+
+<MudDataGrid T="AppUserDto"
+             Items="_users"
+             Loading="_loading"
+             Hover="true"
+             Elevation="1">
+    <Columns>
+        <PropertyColumn Property="u => u.Name" Title="Name" />
+        <PropertyColumn Property="u => u.Email" Title="Email" />
+        <TemplateColumn Title="Roles">
+            <CellTemplate>
+                @foreach (var role in context.Item.Roles)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="GetRoleColor(role)">@role</MudChip>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="u => u.LastLoginAt" Title="Last Login" Format="yyyy-MM-dd HH:mm" />
+        <TemplateColumn CellClass="d-flex justify-end" Title="Actions" Sortable="false">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                               Size="Size.Small"
+                               OnClick="() => EditRolesAsync(context.Item)" />
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+</MudDataGrid>
+
+@code {
+    private IReadOnlyList<AppUserDto> _users = [];
+    private bool _loading = true;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsersAsync();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        _loading = true;
+        _users = await Api.GetUsersAsync();
+        _loading = false;
+    }
+
+    private async Task EditRolesAsync(AppUserDto user)
+    {
+        var parameters = new DialogParameters<UserRolesDialog>
+        {
+            { x => x.User, user },
+        };
+
+        var dialog = await DialogService.ShowAsync<UserRolesDialog>("Edit Roles", parameters);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false, Data: IReadOnlyList<string> newRoles })
+        {
+            var updated = await Api.UpdateUserRolesAsync(user.Id, newRoles);
+            if (updated is not null)
+            {
+                Snackbar.Add($"Roles updated for {user.Name}.", Severity.Success);
+                await LoadUsersAsync();
+            }
+            else
+            {
+                Snackbar.Add("Failed to update roles.", Severity.Error);
+            }
+        }
+    }
+
+    private static Color GetRoleColor(string role) => role switch
+    {
+        AppRoles.Admin => Color.Error,
+        AppRoles.User => Color.Primary,
+        AppRoles.Viewer => Color.Info,
+        _ => Color.Default,
+    };
+}

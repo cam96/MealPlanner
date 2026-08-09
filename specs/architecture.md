@@ -200,5 +200,47 @@ second service is ever added that shares the same signing key but should not sha
 - `/login` — login page (Web)
 - `/auth/login`, `/auth/logout` — OAuth flow endpoints (Web)
 
+### Role-based authorization
+
+The system uses ASP.NET Core **policy-based authorization** with roles stored in the SQLite database.
+
+#### Roles
+
+| Role | Description | Access |
+| --- | --- | --- |
+| `User` | Default household member | All pages and endpoints |
+| `Viewer` | Read-only guest | View dashboard, recipes, planner — no edits |
+| `Admin` | Household admin | Everything + user/role management |
+
+#### How it works
+
+1. **User provisioning**: On first Google login, the Web project calls `POST /api/auth/ensure-user`.
+   The API creates an `AppUser` record with the default `User` role.
+2. **Role claims in cookie**: The returned roles are added as `ClaimTypes.Role` claims to the
+   authentication cookie. Roles persist for the session lifetime (1 hour).
+3. **JWT role claims**: `JwtAuthorizationHandler` copies all role claims from the cookie identity
+   into every outbound JWT, so the API can enforce authorization without a database lookup.
+4. **Policy enforcement**:
+   - API endpoints use `.RequireAuthorization("User")` (or `"Admin"` for user management)
+   - Blazor pages use `@attribute [Authorize(Policy = "User")]` (or `"Admin"`)
+   - Policies are registered centrally via `AddMealPlannerAuthorization()` in `ServiceDefaults`
+
+#### Data model
+
+- `AppUser` — email, name, Google ID, timestamps
+- `AppUserRole` — user-role assignment (many-to-many via role string)
+- Both managed via EF Core with unique constraints on email, Google ID, and (userId, role)
+
+#### Role change propagation
+
+Role changes take effect on the user's **next login** (when the cookie is refreshed). This is
+acceptable for a small user base; if needed, cookie invalidation can be added later.
+
+#### Admin endpoints
+
+- `POST /api/auth/ensure-user` — requires authentication only (no role)
+- `GET /api/users` — requires `Admin` role
+- `PUT /api/users/{id}/roles` — requires `Admin` role
+
 > Keep this document updated as the architecture evolves; it is referenced from the README and the
 > project-wide Copilot instructions.

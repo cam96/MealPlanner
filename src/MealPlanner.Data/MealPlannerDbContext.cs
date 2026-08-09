@@ -54,6 +54,12 @@ public class MealPlannerDbContext(DbContextOptions<MealPlannerDbContext> options
     /// <summary>Gets the cart entries for generated (meal-plan-derived) shopping list items.</summary>
     public DbSet<GeneratedItemCartEntry> GeneratedItemCartEntries => Set<GeneratedItemCartEntry>();
 
+    /// <summary>Gets the authenticated application users.</summary>
+    public DbSet<AppUser> AppUsers => Set<AppUser>();
+
+    /// <summary>Gets the role assignments for application users.</summary>
+    public DbSet<AppUserRole> AppUserRoles => Set<AppUserRole>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

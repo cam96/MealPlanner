@@ -1,5 +1,5 @@
 @page "/pantry"
-@attribute [Authorize]
+@attribute [Authorize(Policy = "User")]
 @using MealPlanner.Contracts
 @using MealPlanner.Web.Components.Dialogs
 @inject MealPlannerApiClient Api

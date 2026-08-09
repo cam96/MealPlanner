@@ -1,9 +1,14 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http.Headers;
+using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
+using MealPlanner.Contracts.Auth;
+using MealPlanner.ServiceDefaults.Authorization;
 using MealPlanner.Web.Components;
 using MealPlanner.Web.Services;
 using MudBlazor.Services;
@@ -56,9 +61,50 @@ builder.Services.AddAuthentication(options =>
     {
         options.ClientId = googleClientId;
         options.ClientSecret = googleClientSecret;
+
+        // After Google authenticates the user, call the API to ensure the user exists in the DB
+        // and retrieve their assigned roles. Add the roles as claims to the cookie identity.
+        options.Events.OnCreatingTicket = async context =>
+        {
+            var identity = (ClaimsIdentity?)context.Principal?.Identity;
+            if (identity is null) return;
+
+            var settings = context.HttpContext.RequestServices.GetRequiredService<JwtTokenSettings>();
+            var httpClientFactory = context.HttpContext.RequestServices.GetRequiredService<IHttpClientFactory>();
+
+            // Generate a temporary JWT from the Google claims so the API can authenticate this call.
+            var tempToken = GenerateTemporaryJwt(identity, settings);
+
+            try
+            {
+                var client = httpClientFactory.CreateClient("RoleResolution");
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tempToken);
+
+                var response = await client.PostAsync("/api/auth/ensure-user", null);
+                if (response.IsSuccessStatusCode)
+                {
+                    var rolesResponse = await response.Content.ReadFromJsonAsync<UserRolesResponse>();
+                    if (rolesResponse?.Roles is not null)
+                    {
+                        foreach (var role in rolesResponse.Roles)
+                        {
+                            identity.AddClaim(new Claim(ClaimTypes.Role, role));
+                        }
+                        return;
+                    }
+                }
+            }
+            catch
+            {
+                // Graceful degradation: if the API is unreachable, assign the default role.
+            }
+
+            // Fallback: assign the default User role.
+            identity.AddClaim(new Claim(ClaimTypes.Role, AppRoles.User));
+        };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddMealPlannerAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 
 // JWT signing settings for authenticating outbound API calls.
@@ -79,6 +125,11 @@ builder.Services.AddTransient<JwtAuthorizationHandler>();
 builder.Services.AddHttpClient<MealPlannerApiClient>(client =>
     client.BaseAddress = new Uri("https+http://api"))
     .AddHttpMessageHandler<JwtAuthorizationHandler>();
+
+// Separate named HTTP client used only during OAuth login to resolve user roles.
+// Does NOT use JwtAuthorizationHandler (user isn't fully authenticated yet at that point).
+builder.Services.AddHttpClient("RoleResolution", client =>
+    client.BaseAddress = new Uri("https+http://api"));
 
 var app = builder.Build();
 
@@ -120,3 +171,28 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+
+// Generates a short-lived JWT from the given identity for use during the OAuth login flow.
+// This token contains only the basic identity claims (sub, name, email) — no roles — and is used
+// to authenticate the call to the API's ensure-user endpoint.
+static string GenerateTemporaryJwt(ClaimsIdentity identity, JwtTokenSettings settings)
+{
+    var now = DateTime.UtcNow;
+    var claims = new[]
+    {
+        new Claim(JwtRegisteredClaimNames.Sub, identity.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? ""),
+        new Claim(JwtRegisteredClaimNames.Name, identity.FindFirst(ClaimTypes.Name)?.Value ?? ""),
+        new Claim(JwtRegisteredClaimNames.Email, identity.FindFirst(ClaimTypes.Email)?.Value ?? ""),
+    };
+
+    var credentials = new SigningCredentials(settings.Key, SecurityAlgorithms.HmacSha256);
+    var token = new JwtSecurityToken(
+        issuer: settings.Issuer,
+        audience: settings.Audience,
+        claims: claims,
+        notBefore: now,
+        expires: now.AddMinutes(5),
+        signingCredentials: credentials);
+
+    return new JwtSecurityTokenHandler().WriteToken(token);
+}

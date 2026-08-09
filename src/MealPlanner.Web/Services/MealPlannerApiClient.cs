@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MealPlanner.Contracts;
+using MealPlanner.Contracts.Auth;
 using MealPlanner.Contracts.Cnf;
 using MealPlanner.Contracts.Combos;
 using MealPlanner.Contracts.Ingredients;
@@ -725,4 +726,39 @@ public sealed class MealPlannerApiClient(HttpClient httpClient)
         CancellationToken cancellationToken = default) =>
         await httpClient.GetFromJsonAsync<DashboardDto>(
             $"/api/plans/{year}/{month}/dashboard", JsonOptions, cancellationToken);
+
+    // -- Users (Admin) --------------------------------------------------------------------------
+
+    /// <summary>Gets all application users with their role assignments.</summary>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The list of users, or an empty list if the caller is not an admin.</returns>
+    public async Task<IReadOnlyList<AppUserDto>> GetUsersAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await httpClient.GetFromJsonAsync<IReadOnlyList<AppUserDto>>(
+                "/api/users", JsonOptions, cancellationToken) ?? [];
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.Forbidden)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>Updates a user's role assignments.</summary>
+    /// <param name="userId">The user identifier.</param>
+    /// <param name="roles">The new set of roles to assign.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The updated user, or <see langword="null"/> on failure.</returns>
+    public async Task<AppUserDto?> UpdateUserRolesAsync(
+        int userId,
+        IReadOnlyList<string> roles,
+        CancellationToken cancellationToken = default)
+    {
+        var request = new UpdateUserRolesRequest(roles);
+        using var response = await httpClient.PutAsJsonAsync(
+            $"/api/users/{userId}/roles", request, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<AppUserDto>(JsonOptions, cancellationToken);
+    }
 }

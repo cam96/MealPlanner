@@ -40,7 +40,7 @@ public sealed class EndpointAuthorizationTests
             AllowAutoRedirect = false,
         });
         _authenticatedClient.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", GenerateTestToken());
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", GenerateTestToken("User"));
     }
 
     [OneTimeTearDown]
@@ -95,17 +95,22 @@ public sealed class EndpointAuthorizationTests
         Assert.That(response.StatusCode, Is.Not.EqualTo(HttpStatusCode.Unauthorized));
     }
 
-    private static string GenerateTestToken()
+    private static string GenerateTestToken(params string[] roles)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JwtKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, "test-user-id"),
-            new Claim(JwtRegisteredClaimNames.Name, "Test User"),
-            new Claim(JwtRegisteredClaimNames.Email, "test@example.com"),
+            new(JwtRegisteredClaimNames.Sub, "test-user-id"),
+            new(JwtRegisteredClaimNames.Name, "Test User"),
+            new(JwtRegisteredClaimNames.Email, "test@example.com"),
         };
+
+        foreach (var role in roles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, role));
+        }
 
         var token = new JwtSecurityToken(
             issuer: "MealPlanner.Web",

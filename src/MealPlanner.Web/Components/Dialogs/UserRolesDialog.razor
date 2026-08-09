@@ -1,0 +1,61 @@
+@using MealPlanner.Contracts.Auth
+@using MealPlanner.ServiceDefaults.Authorization
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-4">
+            Select the roles for <strong>@User?.Name</strong> (@User?.Email).
+        </MudText>
+        <MudCheckBox T="bool" @bind-Value="_hasUser" Label="User (full access)" Color="Color.Primary" />
+        <MudCheckBox T="bool" @bind-Value="_hasViewer" Label="Viewer (read-only)" Color="Color.Info" />
+        <MudCheckBox T="bool" @bind-Value="_hasAdmin" Label="Admin (manage users)" Color="Color.Error" />
+        @if (!_hasUser && !_hasViewer && !_hasAdmin)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-2">At least one role is required.</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="!HasAnyRole" OnClick="Submit">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private bool _hasUser;
+    private bool _hasViewer;
+    private bool _hasAdmin;
+
+    private bool HasAnyRole => _hasUser || _hasViewer || _hasAdmin;
+
+    /// <summary>The dialog instance used to return a result.</summary>
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The user whose roles are being edited.</summary>
+    [Parameter]
+    public AppUserDto? User { get; set; }
+
+    /// <inheritdoc />
+    protected override void OnParametersSet()
+    {
+        if (User is not null)
+        {
+            _hasUser = User.Roles.Contains(AppRoles.User);
+            _hasViewer = User.Roles.Contains(AppRoles.Viewer);
+            _hasAdmin = User.Roles.Contains(AppRoles.Admin);
+        }
+    }
+
+    private void Submit()
+    {
+        var roles = new List<string>();
+        if (_hasUser) roles.Add(AppRoles.User);
+        if (_hasViewer) roles.Add(AppRoles.Viewer);
+        if (_hasAdmin) roles.Add(AppRoles.Admin);
+
+        MudDialog.Close(DialogResult.Ok<IReadOnlyList<string>>(roles));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

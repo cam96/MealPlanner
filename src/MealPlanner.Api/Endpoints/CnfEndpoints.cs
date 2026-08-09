@@ -1,6 +1,7 @@
 using MealPlanner.Contracts.Cnf;
 using MealPlanner.Data.Cnf;
 using Microsoft.AspNetCore.Http.HttpResults;
+using MealPlanner.ServiceDefaults.Authorization;
 
 namespace MealPlanner.Api.Endpoints;
 
@@ -20,7 +21,7 @@ public static class CnfEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/cnf").WithTags("Canadian Nutrient File").RequireAuthorization();
+        var group = app.MapGroup("/api/cnf").WithTags("Canadian Nutrient File").RequireAuthorization(AuthorizationPolicies.User);
 
         group.MapGet("/status", GetStatus);
         group.MapGet("/foods", SearchFoods);

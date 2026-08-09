@@ -5,6 +5,7 @@ using MealPlanner.Domain.Entities;
 using MealPlanner.Domain.Planning;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using MealPlanner.ServiceDefaults.Authorization;
 
 namespace MealPlanner.Api.Endpoints;
 
@@ -18,7 +19,7 @@ public static class PlannerEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/plans").WithTags("Planner").RequireAuthorization();
+        var group = app.MapGroup("/api/plans").WithTags("Planner").RequireAuthorization(AuthorizationPolicies.User);
 
         group.MapGet("/{year:int}/{month:int}", GetMonthAsync);
         group.MapPut("/days/{dayId:int}", UpdateDayAsync);
