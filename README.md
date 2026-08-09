@@ -347,7 +347,8 @@ The application version flows from one source:
    version (and `:latest` for stable releases), and attaches compressed image tarballs
    (`MealPlanner-Api-VERSION.tar.gz`, `MealPlanner-Web-VERSION.tar.gz`) to the GitHub Release.
    Versions containing a hyphen (e.g., `1.0.0-alpha.1`) are marked as pre-releases and do not
-   update the `:latest` tag.
+   update the `:latest` tag. When **automatic deployment** is enabled, a follow-up job SSHes into
+   the home server, pulls the latest images, and restarts the stack.
 
 The Dockerfiles accept a `VERSION` build arg and pass it to `dotnet publish /p:Version=${VERSION}`.
 The web UI reads the assembly `InformationalVersion` at runtime and displays it at the bottom of the
@@ -402,6 +403,26 @@ docker compose up -d
 
 Because the images are pre-built with the version already embedded, no source code or .NET SDK is
 needed on the server — just Docker.
+
+#### Automatic deployment from releases
+
+The release workflow includes an optional **deploy** job that SSHes into the home server and
+restarts the stack after a successful release. To enable it:
+
+1. **Create a `production` environment** in the repo (Settings → Environments → New environment).
+2. **Set the repository variable** `DEPLOY_ENABLED` to `true` (Settings → Variables → New variable).
+3. **Add these secrets** to the `production` environment:
+
+   | Secret | Value |
+   | --- | --- |
+   | `DEPLOY_HOST` | Public IP or hostname of the home server |
+   | `DEPLOY_USER` | SSH username on the server |
+   | `DEPLOY_SSH_KEY` | SSH private key (the corresponding public key must be in `~/.ssh/authorized_keys` on the server) |
+   | `DEPLOY_PORT` | SSH port (optional, defaults to 22) |
+   | `DEPLOY_PATH` | Absolute path to the repo clone on the server (e.g., `/home/cam/mealplanner`) |
+
+When enabled, the deploy job runs after the release job succeeds: it does a `git pull --ff-only` to
+pick up any compose/Caddyfile changes, pulls the latest images, and runs `docker compose up -d`.
 
 ### GHCR privacy (maintainers)
 
