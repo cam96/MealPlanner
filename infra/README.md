@@ -161,3 +161,114 @@ az deployment group create \
 - **Key Vault**: Secrets are stored in Key Vault with RBAC access (Key Vault Secrets User role).
 - **Internal API**: The API container app has internal-only ingress — it's not reachable from
   the internet.
+
+## CI/CD Pipeline
+
+Infrastructure changes are validated and deployed automatically via GitHub Actions.
+
+### Pipeline Flow
+
+```mermaid
+flowchart LR
+    PR["PR opened"] --> Lint["Bicep Lint"]
+    PR --> Checkov["Security Scan"]
+    PR --> Validate["Validate"]
+    Validate --> WhatIfUAT["What-If UAT"]
+    Validate --> WhatIfPRD["What-If PRD"]
+    WhatIfUAT --> PRComment["PR Comment"]
+    WhatIfPRD --> PRComment
+
+    Merge["Merge to main"] --> Lint2["Lint + Validate"]
+    Lint2 --> WhatIf2["What-If"]
+    WhatIf2 --> DeployUAT["Deploy UAT"]
+    DeployUAT --> Approval{"Manual Approval"}
+    Approval --> DeployPRD["Deploy PRD"]
+```
+
+### Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `bicep-unit-tests.yml` | PR + push to main (infra changes) | Lint, validate, security scan (Checkov) |
+| `bicep-whatif-deploy.yml` | PR + push to main (infra changes) | What-if preview, deploy UAT → PRD |
+
+### PR Experience
+
+When a PR modifies `infra/` files:
+1. **Lint** — ensures Bicep compiles without warnings
+2. **Validate** — confirms the template is valid against the real resource group
+3. **Security Scan** — Checkov scans for misconfigurations (uploaded to GitHub Advanced Security)
+4. **What-If** — previews changes for both UAT and PRD, posted as PR comments
+
+### Deployment Strategy
+
+On merge to `main`:
+1. **UAT deploys automatically** (GitHub Environment: `uat`)
+2. **PRD requires manual approval** (GitHub Environment: `prd` with protection rules)
+
+### Required GitHub Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `AZURE_CLIENT_ID` | Service principal app/client ID (OIDC) |
+| `AZURE_TENANT_ID` | Azure AD tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Target Azure subscription |
+| `UAT_JWT_SIGNING_KEY` | JWT key for UAT |
+| `UAT_GOOGLE_CLIENT_ID` | Google OAuth client ID for UAT |
+| `UAT_GOOGLE_CLIENT_SECRET` | Google OAuth client secret for UAT |
+| `PRD_JWT_SIGNING_KEY` | JWT key for PRD |
+| `PRD_GOOGLE_CLIENT_ID` | Google OAuth client ID for PRD |
+| `PRD_GOOGLE_CLIENT_SECRET` | Google OAuth client secret for PRD |
+
+### Required GitHub Environments
+
+Configure in **Settings → Environments**:
+- **`uat`** — no protection rules (auto-deploys on merge)
+- **`prd`** — required reviewers (manual approval before deploy)
+
+### Azure OIDC Setup
+
+The workflows use OIDC (federated credentials) — no stored client secrets:
+
+```bash
+# Create federated credential for main branch
+az ad app federated-credential create \
+  --id <APP_OBJECT_ID> \
+  --parameters '{
+    "name": "github-main",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:cam96/MealPlanner:ref:refs/heads/main",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'
+
+# Create federated credential for PRs
+az ad app federated-credential create \
+  --id <APP_OBJECT_ID> \
+  --parameters '{
+    "name": "github-pr",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:cam96/MealPlanner:pull_request",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'
+
+# Create federated credential for UAT environment
+az ad app federated-credential create \
+  --id <APP_OBJECT_ID> \
+  --parameters '{
+    "name": "github-env-uat",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:cam96/MealPlanner:environment:uat",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'
+
+# Create federated credential for PRD environment
+az ad app federated-credential create \
+  --id <APP_OBJECT_ID> \
+  --parameters '{
+    "name": "github-env-prd",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:cam96/MealPlanner:environment:prd",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'
+```
+

@@ -1,0 +1,239 @@
+name: 'Bicep What-If / Deploy'
+
+# Runs on PRs (what-if only) and pushes to main (what-if + deploy).
+# Deploys UAT automatically on main push, PRD requires manual approval.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/**'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  LOCATION: canadacentral
+  ACR_NAME: crmealplanner
+
+jobs:
+  # ─── What-If (UAT) ─────────────────────────────────────────────────────────────
+  whatif-uat:
+    name: 'What-If (UAT)'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Az CLI login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Bicep Lint
+        run: az bicep build --file infra/main.bicep
+
+      - name: Bicep Validate (UAT)
+        run: |
+          az deployment group validate \
+            --name validate-uat-${{ github.run_id }} \
+            --resource-group rg-mealplanner-uat \
+            --template-file infra/main.bicep \
+            --parameters @infra/environments/uat.bicepparam \
+            --parameters jwtSigningKey='${{ secrets.UAT_JWT_SIGNING_KEY }}' \
+                         googleClientId='${{ secrets.UAT_GOOGLE_CLIENT_ID }}' \
+                         googleClientSecret='${{ secrets.UAT_GOOGLE_CLIENT_SECRET }}'
+
+      - name: What-If (UAT)
+        run: |
+          az deployment group what-if \
+            --name whatif-uat-${{ github.run_id }} \
+            --resource-group rg-mealplanner-uat \
+            --template-file infra/main.bicep \
+            --parameters @infra/environments/uat.bicepparam \
+            --parameters jwtSigningKey='${{ secrets.UAT_JWT_SIGNING_KEY }}' \
+                         googleClientId='${{ secrets.UAT_GOOGLE_CLIENT_ID }}' \
+                         googleClientSecret='${{ secrets.UAT_GOOGLE_CLIENT_SECRET }}' \
+            > whatif-uat
+
+      - name: Create What-If Summary
+        id: whatif-string
+        run: |
+          WHATIF=$(cat whatif-uat)
+          delimiter="$(openssl rand -hex 8)"
+          echo "summary<<${delimiter}" >> $GITHUB_OUTPUT
+          echo "## 🔍 What-If Output (UAT)" >> $GITHUB_OUTPUT
+          echo "<details><summary>Click to expand</summary>" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo '```' >> $GITHUB_OUTPUT
+          echo "$WHATIF" >> $GITHUB_OUTPUT
+          echo '```' >> $GITHUB_OUTPUT
+          echo "</details>" >> $GITHUB_OUTPUT
+          echo "${delimiter}" >> $GITHUB_OUTPUT
+
+      - name: Publish What-If to Job Summary
+        env:
+          SUMMARY: ${{ steps.whatif-string.outputs.summary }}
+        run: echo "$SUMMARY" >> $GITHUB_STEP_SUMMARY
+
+      - name: Post What-If to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          SUMMARY: "${{ steps.whatif-string.outputs.summary }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const body = `${process.env.SUMMARY}`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            })
+
+  # ─── What-If (PRD) ─────────────────────────────────────────────────────────────
+  whatif-prd:
+    name: 'What-If (PRD)'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Az CLI login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: What-If (PRD)
+        run: |
+          az deployment group what-if \
+            --name whatif-prd-${{ github.run_id }} \
+            --resource-group rg-mealplanner-prd \
+            --template-file infra/main.bicep \
+            --parameters @infra/environments/prd.bicepparam \
+            --parameters jwtSigningKey='${{ secrets.PRD_JWT_SIGNING_KEY }}' \
+                         googleClientId='${{ secrets.PRD_GOOGLE_CLIENT_ID }}' \
+                         googleClientSecret='${{ secrets.PRD_GOOGLE_CLIENT_SECRET }}' \
+            > whatif-prd
+
+      - name: Create What-If Summary
+        id: whatif-string
+        run: |
+          WHATIF=$(cat whatif-prd)
+          delimiter="$(openssl rand -hex 8)"
+          echo "summary<<${delimiter}" >> $GITHUB_OUTPUT
+          echo "## 🔍 What-If Output (PRD)" >> $GITHUB_OUTPUT
+          echo "<details><summary>Click to expand</summary>" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo '```' >> $GITHUB_OUTPUT
+          echo "$WHATIF" >> $GITHUB_OUTPUT
+          echo '```' >> $GITHUB_OUTPUT
+          echo "</details>" >> $GITHUB_OUTPUT
+          echo "${delimiter}" >> $GITHUB_OUTPUT
+
+      - name: Publish What-If to Job Summary
+        env:
+          SUMMARY: ${{ steps.whatif-string.outputs.summary }}
+        run: echo "$SUMMARY" >> $GITHUB_STEP_SUMMARY
+
+      - name: Post What-If to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          SUMMARY: "${{ steps.whatif-string.outputs.summary }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const body = `${process.env.SUMMARY}`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            })
+
+  # ─── Deploy UAT ────────────────────────────────────────────────────────────────
+  deploy-uat:
+    name: 'Deploy (UAT)'
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: uat
+    needs: [whatif-uat]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Az CLI login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to UAT
+        run: |
+          az deployment group create \
+            --name deploy-uat-${{ github.run_id }} \
+            --resource-group rg-mealplanner-uat \
+            --template-file infra/main.bicep \
+            --parameters @infra/environments/uat.bicepparam \
+            --parameters jwtSigningKey='${{ secrets.UAT_JWT_SIGNING_KEY }}' \
+                         googleClientId='${{ secrets.UAT_GOOGLE_CLIENT_ID }}' \
+                         googleClientSecret='${{ secrets.UAT_GOOGLE_CLIENT_SECRET }}'
+
+      - name: Output deployment results
+        run: |
+          az deployment group show \
+            --name deploy-uat-${{ github.run_id }} \
+            --resource-group rg-mealplanner-uat \
+            --query properties.outputs
+
+  # ─── Deploy PRD ────────────────────────────────────────────────────────────────
+  deploy-prd:
+    name: 'Deploy (PRD)'
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: prd
+    needs: [deploy-uat, whatif-prd]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Az CLI login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to PRD
+        run: |
+          az deployment group create \
+            --name deploy-prd-${{ github.run_id }} \
+            --resource-group rg-mealplanner-prd \
+            --template-file infra/main.bicep \
+            --parameters @infra/environments/prd.bicepparam \
+            --parameters jwtSigningKey='${{ secrets.PRD_JWT_SIGNING_KEY }}' \
+                         googleClientId='${{ secrets.PRD_GOOGLE_CLIENT_ID }}' \
+                         googleClientSecret='${{ secrets.PRD_GOOGLE_CLIENT_SECRET }}'
+
+      - name: Output deployment results
+        run: |
+          az deployment group show \
+            --name deploy-prd-${{ github.run_id }} \
+            --resource-group rg-mealplanner-prd \
+            --query properties.outputs
