@@ -1,0 +1,73 @@
+name: 'Bicep Unit Tests'
+
+# Runs on PRs and pushes to main when infra files change.
+# Validates Bicep code compiles, lints cleanly, and passes security scanning.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/**'
+
+permissions:
+  id-token: write
+  contents: read
+  security-events: write
+
+env:
+  LOCATION: canadacentral
+
+jobs:
+  bicep-unit-tests:
+    name: 'Bicep Unit Tests'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Authenticate to Az CLI using OIDC (required for validate which checks RBAC)
+      - name: Az CLI login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Lint: checks that Bicep files adhere to canonical format and best practices
+      - name: Bicep Lint
+        run: az bicep build --file infra/main.bicep
+
+      # Validate: confirms the template is valid against the Azure resource group
+      - name: Bicep Validate (UAT)
+        run: |
+          az deployment group validate \
+            --name validate-uat-${{ github.run_id }} \
+            --resource-group rg-mealplanner-uat \
+            --template-file infra/main.bicep \
+            --parameters @infra/environments/uat.bicepparam \
+            --parameters jwtSigningKey='placeholder-for-validation' \
+                         googleClientId='placeholder-for-validation' \
+                         googleClientSecret='placeholder-for-validation'
+
+      # Security scan using Checkov (static analysis for misconfigurations)
+      - name: Run Checkov security scan
+        id: checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra
+          framework: bicep
+          soft_fail: true
+          output_format: sarif
+          output_file_path: results.sarif
+
+      # Upload SARIF results to GitHub Advanced Security (code scanning)
+      - name: Upload SARIF file
+        if: success() || failure()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: checkov-bicep

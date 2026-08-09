@@ -9,7 +9,7 @@ services:
       dockerfile: src/MealPlanner.Api/Dockerfile
       args:
         VERSION: ${VERSION:-0.0.0-dev}
-    image: ghcr.io/cam96/mealplanner-api:latest
+    image: crmealplanner.azurecr.io/mealplanner-api:latest
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
@@ -40,7 +40,7 @@ services:
       dockerfile: src/MealPlanner.Web/Dockerfile
       args:
         VERSION: ${VERSION:-0.0.0-dev}
-    image: ghcr.io/cam96/mealplanner-web:latest
+    image: crmealplanner.azurecr.io/mealplanner-web:latest
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
