@@ -761,4 +761,78 @@ public sealed class MealPlannerApiClient(HttpClient httpClient)
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<AppUserDto>(JsonOptions, cancellationToken);
     }
+
+    // -- User Approvals (Admin) -----------------------------------------------------------------
+
+    /// <summary>Gets all pending users, optionally filtered by a search term.</summary>
+    /// <param name="search">Optional name or email search filter.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The list of pending users.</returns>
+    public async Task<IReadOnlyList<AppUserDto>> GetPendingUsersAsync(
+        string? search = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var url = string.IsNullOrWhiteSpace(search)
+                ? "/api/users/pending"
+                : $"/api/users/pending?search={Uri.EscapeDataString(search)}";
+
+            return await httpClient.GetFromJsonAsync<IReadOnlyList<AppUserDto>>(
+                url, JsonOptions, cancellationToken) ?? [];
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.Forbidden)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>Approves a pending user, promoting them to the User role.</summary>
+    /// <param name="userId">The user identifier.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The approved user, or <see langword="null"/> on failure.</returns>
+    public async Task<AppUserDto?> ApproveUserAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsync(
+            $"/api/users/{userId}/approve", null, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<AppUserDto>(JsonOptions, cancellationToken);
+    }
+
+    /// <summary>Rejects a pending user, deleting them from the system.</summary>
+    /// <param name="userId">The user identifier.</param>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns><see langword="true"/> if the user was rejected successfully.</returns>
+    public async Task<bool> RejectUserAsync(
+        int userId,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsync(
+            $"/api/users/{userId}/reject", null, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>Approves all pending users, promoting them to the User role.</summary>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The number of users approved.</returns>
+    public async Task<int> ApproveAllUsersAsync(CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsync(
+            "/api/users/approve-all", null, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<int>(JsonOptions, cancellationToken);
+    }
+
+    /// <summary>Rejects all pending users, deleting them from the system.</summary>
+    /// <param name="cancellationToken">A token to cancel the request.</param>
+    /// <returns>The number of users rejected.</returns>
+    public async Task<int> RejectAllUsersAsync(CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsync(
+            "/api/users/reject-all", null, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<int>(JsonOptions, cancellationToken);
+    }
 }

@@ -13,4 +13,7 @@ public static class AppRoles
 
     /// <summary>Household admin — everything plus user/role management and settings.</summary>
     public const string Admin = "Admin";
+
+    /// <summary>New user awaiting admin approval — no page access granted.</summary>
+    public const string UserPending = "UserPending";
 }

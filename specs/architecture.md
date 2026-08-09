@@ -211,11 +211,13 @@ The system uses ASP.NET Core **policy-based authorization** with roles stored in
 | `User` | Default household member | All pages and endpoints |
 | `Viewer` | Read-only guest | View dashboard, recipes, planner — no edits |
 | `Admin` | Household admin | Everything + user/role management |
+| `UserPending` | New user awaiting approval | No page access — sees pending-approval screen |
 
 #### How it works
 
 1. **User provisioning**: On first Google login, the Web project calls `POST /api/auth/ensure-user`.
-   The API creates an `AppUser` record with the default `User` role.
+   The API creates an `AppUser` record with the `UserPending` role (unless the email matches the
+   bootstrap admin setting — see below).
 2. **Role claims in cookie**: The returned roles are added as `ClaimTypes.Role` claims to the
    authentication cookie. Roles persist for the session lifetime (1 hour).
 3. **JWT role claims**: `JwtAuthorizationHandler` copies all role claims from the cookie identity
@@ -224,6 +226,30 @@ The system uses ASP.NET Core **policy-based authorization** with roles stored in
    - API endpoints use `.RequireAuthorization("User")` (or `"Admin"` for user management)
    - Blazor pages use `@attribute [Authorize(Policy = "User")]` (or `"Admin"`)
    - Policies are registered centrally via `AddMealPlannerAuthorization()` in `ServiceDefaults`
+   - `UserPending` is deliberately excluded from all policies — pending users are redirected to
+     `/pending-approval`
+
+#### New user approval flow
+
+1. New users log in via Google → receive `UserPending` role → see a "pending approval" page
+2. Admin navigates to `/user-approvals` to review pending users
+3. Admin can search, approve (one or all), or reject (one or all)
+4. **Approve** replaces `UserPending` with `User` — takes effect on next login
+5. **Reject** deletes the user record — they can re-register later
+
+#### Admin bootstrap (seed command)
+
+On fresh deployment, there are no admin users. The deployer uses a one-time anonymous endpoint to
+register an admin email:
+
+```bash
+curl -X POST http://api:8080/api/admin/bootstrap \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@example.com"}'
+```
+
+When that email's owner logs in via Google, they receive `Admin` + `User` roles instead of
+`UserPending`. The endpoint returns `409 Conflict` if an admin already exists.
 
 #### Data model
 
@@ -239,8 +265,14 @@ acceptable for a small user base; if needed, cookie invalidation can be added la
 #### Admin endpoints
 
 - `POST /api/auth/ensure-user` — requires authentication only (no role)
+- `POST /api/admin/bootstrap` — anonymous, only works when no admin exists
 - `GET /api/users` — requires `Admin` role
+- `GET /api/users/pending?search=` — requires `Admin` role
 - `PUT /api/users/{id}/roles` — requires `Admin` role
+- `POST /api/users/{id}/approve` — requires `Admin` role
+- `POST /api/users/{id}/reject` — requires `Admin` role
+- `POST /api/users/approve-all` — requires `Admin` role
+- `POST /api/users/reject-all` — requires `Admin` role
 
 > Keep this document updated as the architecture evolves; it is referenced from the README and the
 > project-wide Copilot instructions.

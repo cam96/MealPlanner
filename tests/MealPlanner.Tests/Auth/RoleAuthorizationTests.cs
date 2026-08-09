@@ -121,10 +121,11 @@ public sealed class RoleAuthorizationTests
     }
 
     /// <summary>
-    /// The ensure-user endpoint creates a new user with the default "User" role on first call.
+    /// The ensure-user endpoint creates a new user with the "UserPending" role on first call
+    /// (no bootstrap admin email configured).
     /// </summary>
     [Test]
-    public async Task EnsureUser_NewUser_CreatesWithDefaultUserRole()
+    public async Task EnsureUser_NewUser_CreatesWithUserPendingRole()
     {
         using var client = CreateClient();
         var response = await client.PostAsync("/api/auth/ensure-user", null);
@@ -133,7 +134,7 @@ public sealed class RoleAuthorizationTests
 
         var result = await response.Content.ReadFromJsonAsync<UserRolesResponse>();
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.Roles, Does.Contain("User"));
+        Assert.That(result!.Roles, Does.Contain("UserPending"));
     }
 
     /// <summary>
@@ -154,7 +155,7 @@ public sealed class RoleAuthorizationTests
 
         var result = await second.Content.ReadFromJsonAsync<UserRolesResponse>();
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.Roles, Does.Contain("User"));
+        Assert.That(result!.Roles, Does.Contain("UserPending"));
     }
 
     /// <summary>
