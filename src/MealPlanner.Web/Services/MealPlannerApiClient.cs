@@ -17,6 +17,8 @@ using MealPlanner.Contracts.Recipes;
 using MealPlanner.Contracts.Reporting;
 using MealPlanner.Contracts.Stores;
 
+using MealPlanner.Contracts.Household;
+
 namespace MealPlanner.Web.Services;
 
 /// <summary>
@@ -760,5 +762,115 @@ public sealed class MealPlannerApiClient(HttpClient httpClient)
             $"/api/users/{userId}/roles", request, JsonOptions, cancellationToken);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<AppUserDto>(JsonOptions, cancellationToken);
+    }
+
+    // ── Household ───────────────────────────────────────────────────────────────
+
+    /// <summary>Gets the current user's household, or null if not in one.</summary>
+    public async Task<HouseholdDto?> GetHouseholdAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await httpClient.GetFromJsonAsync<HouseholdDto>(
+                "/api/household", JsonOptions, cancellationToken);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Creates a new household for the current user.</summary>
+    public async Task<HouseholdDto?> CreateHouseholdAsync(
+        string name, CancellationToken cancellationToken = default)
+    {
+        var request = new CreateHouseholdRequest(name);
+        using var response = await httpClient.PostAsJsonAsync(
+            "/api/household", request, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<HouseholdDto>(JsonOptions, cancellationToken);
+    }
+
+    /// <summary>Updates the current household's name.</summary>
+    public async Task<HouseholdDto?> UpdateHouseholdAsync(
+        string name, CancellationToken cancellationToken = default)
+    {
+        var request = new UpdateHouseholdRequest(name);
+        using var response = await httpClient.PutAsJsonAsync(
+            "/api/household", request, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<HouseholdDto>(JsonOptions, cancellationToken);
+    }
+
+    /// <summary>Leaves the current household.</summary>
+    public async Task LeaveHouseholdAsync(CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsync("/api/household/leave", null, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Removes a member from the household (owner only).</summary>
+    public async Task RemoveMemberAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.DeleteAsync(
+            $"/api/household/members/{userId}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Creates a new invite link for the household.</summary>
+    public async Task<HouseholdInviteDto?> CreateInviteAsync(CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsync("/api/household/invites", null, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<HouseholdInviteDto>(JsonOptions, cancellationToken);
+    }
+
+    /// <summary>Gets all invites for the household (owner only).</summary>
+    public async Task<IReadOnlyList<HouseholdInviteDto>> GetInvitesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await httpClient.GetFromJsonAsync<IReadOnlyList<HouseholdInviteDto>>(
+                "/api/household/invites", JsonOptions, cancellationToken) ?? [];
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>Revokes an invite (owner only).</summary>
+    public async Task RevokeInviteAsync(int inviteId, CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.DeleteAsync(
+            $"/api/household/invites/{inviteId}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Previews an invite by token (shows household name and expiry).</summary>
+    public async Task<InvitePreviewDto?> PreviewInviteAsync(
+        string token, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await httpClient.GetFromJsonAsync<InvitePreviewDto>(
+                $"/api/household/invite/{token}", JsonOptions, cancellationToken);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Accepts an invite and joins the household.</summary>
+    public async Task<HouseholdDto?> AcceptInviteAsync(
+        string token, CancellationToken cancellationToken = default)
+    {
+        var request = new AcceptInviteRequest(token);
+        using var response = await httpClient.PostAsJsonAsync(
+            "/api/household/join", request, JsonOptions, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<HouseholdDto>(JsonOptions, cancellationToken);
     }
 }

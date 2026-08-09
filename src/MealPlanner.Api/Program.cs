@@ -43,6 +43,8 @@ builder.Services.AddMealPlannerAuthorization();
 
 // API surface.
 builder.Services.AddOpenApi();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<MealPlanner.Api.Household.HouseholdContext>();
 
 // Serialize enums as their string names on the wire for readable, stable payloads.
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -115,5 +117,8 @@ app.MapCnfEndpoints();
 // Authentication and user management.
 app.MapAuthEndpoints();
 app.MapUsersEndpoints();
+
+// Household membership and invitations.
+app.MapHouseholdEndpoints();
 
 app.Run();

@@ -12,8 +12,13 @@ public sealed class MealPlanConfiguration : IEntityTypeConfiguration<MealPlan>
     {
         builder.HasKey(p => p.Id);
 
-        // One plan per calendar month.
-        builder.HasIndex(p => new { p.Year, p.Month }).IsUnique();
+        // One plan per household per calendar month.
+        builder.HasIndex(p => new { p.HouseholdId, p.Year, p.Month }).IsUnique();
+
+        builder.HasOne(p => p.Household)
+            .WithMany()
+            .HasForeignKey(p => p.HouseholdId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasMany(p => p.Days)
             .WithOne(d => d.MealPlan)

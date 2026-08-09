@@ -9,6 +9,12 @@ public class Ingredient
     /// <summary>Gets the surrogate primary key.</summary>
     public int Id { get; set; }
 
+    /// <summary>Gets or sets the identifier of the household this ingredient belongs to.</summary>
+    public int HouseholdId { get; set; }
+
+    /// <summary>Gets or sets the household this ingredient belongs to.</summary>
+    public Household? Household { get; set; }
+
     /// <summary>Gets or sets the ingredient's display name.</summary>
     public required string Name { get; set; }
 

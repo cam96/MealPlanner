@@ -12,6 +12,11 @@ public sealed class ManualShoppingItemConfiguration : IEntityTypeConfiguration<M
     {
         builder.HasKey(m => m.Id);
 
+        builder.HasOne(m => m.Household)
+            .WithMany()
+            .HasForeignKey(m => m.HouseholdId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.Property(m => m.Name)
             .HasMaxLength(200)
             .IsRequired();

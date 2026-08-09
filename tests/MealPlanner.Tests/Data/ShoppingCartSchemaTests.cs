@@ -14,6 +14,7 @@ public class ShoppingCartSchemaTests
 {
     private SqliteConnection _connection = default!;
     private MealPlannerDbContext _context = default!;
+    private int _householdId;
 
     [SetUp]
     public async Task SetUpAsync()
@@ -26,6 +27,32 @@ public class ShoppingCartSchemaTests
             .Options;
         _context = new MealPlannerDbContext(options);
         await _context.Database.MigrateAsync();
+
+        // Create a test user and household for entities that require HouseholdId.
+        var user = new AppUser
+        {
+            GoogleId = "test-google-id",
+            Email = "test@example.com",
+            Name = "Test User",
+            CreatedAt = DateTime.UtcNow,
+            LastLoginAt = DateTime.UtcNow,
+        };
+        _context.AppUsers.Add(user);
+        await _context.SaveChangesAsync();
+
+        var household = new Household
+        {
+            Name = "Test Household",
+            OwnerId = user.Id,
+            CreatedAt = DateTime.UtcNow,
+        };
+        _context.Households.Add(household);
+        await _context.SaveChangesAsync();
+
+        user.HouseholdId = household.Id;
+        await _context.SaveChangesAsync();
+
+        _householdId = household.Id;
     }
 
     [TearDown]
@@ -47,6 +74,7 @@ public class ShoppingCartSchemaTests
             Unit = MeasurementUnit.Each,
             IsInCart = false,
             CreatedAt = new DateTime(2026, 8, 1, 12, 0, 0, DateTimeKind.Utc),
+            HouseholdId = _householdId,
         });
         await _context.SaveChangesAsync();
         _context.ChangeTracker.Clear();
@@ -75,6 +103,7 @@ public class ShoppingCartSchemaTests
             Quantity = null,
             Unit = null,
             CreatedAt = DateTime.UtcNow,
+            HouseholdId = _householdId,
         });
         await _context.SaveChangesAsync();
         _context.ChangeTracker.Clear();
@@ -97,6 +126,7 @@ public class ShoppingCartSchemaTests
             Month = 8,
             Name = "Sponges",
             CreatedAt = DateTime.UtcNow,
+            HouseholdId = _householdId,
         });
         await _context.SaveChangesAsync();
 
@@ -114,7 +144,7 @@ public class ShoppingCartSchemaTests
     [Test]
     public async Task GeneratedItemCartEntry_RoundTripsAllFields()
     {
-        var ingredient = new Ingredient { Name = "Chicken breast", BaseUnit = MeasurementUnit.Gram };
+        var ingredient = new Ingredient { Name = "Chicken breast", BaseUnit = MeasurementUnit.Gram, HouseholdId = _householdId };
         _context.Ingredients.Add(ingredient);
         await _context.SaveChangesAsync();
 
@@ -145,7 +175,7 @@ public class ShoppingCartSchemaTests
     [Test]
     public async Task GeneratedItemCartEntry_UniqueIndex_PreventsDoubleCart()
     {
-        var ingredient = new Ingredient { Name = "Rice", BaseUnit = MeasurementUnit.Gram };
+        var ingredient = new Ingredient { Name = "Rice", BaseUnit = MeasurementUnit.Gram, HouseholdId = _householdId };
         _context.Ingredients.Add(ingredient);
         await _context.SaveChangesAsync();
 
@@ -172,7 +202,7 @@ public class ShoppingCartSchemaTests
     [Test]
     public async Task GeneratedItemCartEntry_SameIngredient_DifferentMonth_Allowed()
     {
-        var ingredient = new Ingredient { Name = "Pasta", BaseUnit = MeasurementUnit.Gram };
+        var ingredient = new Ingredient { Name = "Pasta", BaseUnit = MeasurementUnit.Gram, HouseholdId = _householdId };
         _context.Ingredients.Add(ingredient);
         await _context.SaveChangesAsync();
 
@@ -198,7 +228,7 @@ public class ShoppingCartSchemaTests
     [Test]
     public async Task DeletingIngredient_WithCartEntry_IsBlocked()
     {
-        var ingredient = new Ingredient { Name = "Broccoli", BaseUnit = MeasurementUnit.Gram };
+        var ingredient = new Ingredient { Name = "Broccoli", BaseUnit = MeasurementUnit.Gram, HouseholdId = _householdId };
         _context.Ingredients.Add(ingredient);
         await _context.SaveChangesAsync();
 

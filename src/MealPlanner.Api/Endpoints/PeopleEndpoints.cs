@@ -1,3 +1,4 @@
+using MealPlanner.Api.Household;
 using MealPlanner.Api.Mapping;
 using MealPlanner.Contracts.People;
 using MealPlanner.Data;
@@ -29,12 +30,17 @@ public static class PeopleEndpoints
         return app;
     }
 
-    private static async Task<Ok<IReadOnlyList<PersonDto>>> GetAllAsync(
+    private static async Task<IResult> GetAllAsync(
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var people = await db.People
             .AsNoTracking()
+            .Where(p => p.HouseholdId == householdId)
             .OrderBy(p => p.Name)
             .Select(p => p.ToDto())
             .ToListAsync(cancellationToken);
@@ -42,29 +48,37 @@ public static class PeopleEndpoints
         return TypedResults.Ok<IReadOnlyList<PersonDto>>(people);
     }
 
-    private static async Task<Results<Ok<PersonDto>, NotFound>> GetByIdAsync(
+    private static async Task<IResult> GetByIdAsync(
         int id,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var person = await db.People
             .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(p => p.Id == id && p.HouseholdId == householdId, cancellationToken);
 
         return person is null ? TypedResults.NotFound() : TypedResults.Ok(person.ToDto());
     }
 
-    private static async Task<Results<Created<PersonDto>, ValidationProblem>> CreateAsync(
+    private static async Task<IResult> CreateAsync(
         SavePersonRequest request,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         if (Validate(request) is { } errors)
         {
             return TypedResults.ValidationProblem(errors);
         }
 
-        var person = new Person { Name = request.Name.Trim() };
+        var person = new Person { Name = request.Name.Trim(), HouseholdId = householdId };
         person.Apply(request);
 
         db.People.Add(person);
@@ -73,18 +87,22 @@ public static class PeopleEndpoints
         return TypedResults.Created($"/api/people/{person.Id}", person.ToDto());
     }
 
-    private static async Task<Results<Ok<PersonDto>, NotFound, ValidationProblem>> UpdateAsync(
+    private static async Task<IResult> UpdateAsync(
         int id,
         SavePersonRequest request,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         if (Validate(request) is { } errors)
         {
             return TypedResults.ValidationProblem(errors);
         }
 
-        var person = await db.People.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        var person = await db.People.FirstOrDefaultAsync(p => p.Id == id && p.HouseholdId == householdId, cancellationToken);
         if (person is null)
         {
             return TypedResults.NotFound();
@@ -96,12 +114,16 @@ public static class PeopleEndpoints
         return TypedResults.Ok(person.ToDto());
     }
 
-    private static async Task<Results<NoContent, NotFound>> DeleteAsync(
+    private static async Task<IResult> DeleteAsync(
         int id,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
-        var person = await db.People.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
+        var person = await db.People.FirstOrDefaultAsync(p => p.Id == id && p.HouseholdId == householdId, cancellationToken);
         if (person is null)
         {
             return TypedResults.NotFound();

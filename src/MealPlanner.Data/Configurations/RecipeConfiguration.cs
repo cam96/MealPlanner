@@ -16,7 +16,12 @@ public sealed class RecipeConfiguration : IEntityTypeConfiguration<Recipe>
             .IsRequired()
             .HasMaxLength(200);
 
-        builder.HasIndex(r => r.Name);
+        builder.HasIndex(r => new { r.HouseholdId, r.Name });
+
+        builder.HasOne(r => r.Household)
+            .WithMany()
+            .HasForeignKey(r => r.HouseholdId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.Property(r => r.MealType)
             .HasConversion<string>()

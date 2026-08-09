@@ -14,6 +14,7 @@ public class CoreDataSchemaTests
 {
     private SqliteConnection _connection = default!;
     private MealPlannerDbContext _context = default!;
+    private int _householdId;
 
     [SetUp]
     public async Task SetUpAsync()
@@ -27,6 +28,32 @@ public class CoreDataSchemaTests
             .Options;
         _context = new MealPlannerDbContext(options);
         await _context.Database.MigrateAsync();
+
+        // Create a test user and household for entities that require HouseholdId.
+        var user = new AppUser
+        {
+            GoogleId = "test-google-id",
+            Email = "test@example.com",
+            Name = "Test User",
+            CreatedAt = DateTime.UtcNow,
+            LastLoginAt = DateTime.UtcNow,
+        };
+        _context.AppUsers.Add(user);
+        await _context.SaveChangesAsync();
+
+        var household = new Household
+        {
+            Name = "Test Household",
+            OwnerId = user.Id,
+            CreatedAt = DateTime.UtcNow,
+        };
+        _context.Households.Add(household);
+        await _context.SaveChangesAsync();
+
+        user.HouseholdId = household.Id;
+        await _context.SaveChangesAsync();
+
+        _householdId = household.Id;
     }
 
     [TearDown]
@@ -37,24 +64,29 @@ public class CoreDataSchemaTests
     }
 
     [Test]
-    public async Task Migration_SeedsDefaultStores()
+    public async Task Migration_CreatesHouseholdsTable()
     {
-        var stores = await _context.Stores.OrderBy(s => s.Id).Select(s => s.Name).ToListAsync();
-
-        Assert.That(stores, Is.EqualTo(new[] { "Costco", "Superstore", "Safeway" }));
+        var household = await _context.Households.FirstOrDefaultAsync(h => h.Id == _householdId);
+        Assert.That(household, Is.Not.Null);
+        Assert.That(household!.Name, Is.EqualTo("Test Household"));
     }
 
     [Test]
     public async Task IngredientPrice_RoundTripsUnitAndPrice()
     {
-        var ingredient = new Ingredient { Name = "Rolled oats", BaseUnit = MeasurementUnit.Gram };
+        var store = new Store { Name = "TestStore", HouseholdId = _householdId };
+        _context.Stores.Add(store);
+        await _context.SaveChangesAsync();
+
+        var ingredient = new Ingredient { Name = "Rolled oats", BaseUnit = MeasurementUnit.Gram, HouseholdId = _householdId };
         _context.Ingredients.Add(ingredient);
         await _context.SaveChangesAsync();
 
         _context.IngredientPrices.Add(new IngredientPrice
         {
             IngredientId = ingredient.Id,
-            StoreId = 1,
+            StoreId = store.Id,
+            HouseholdId = _householdId,
             Price = 9.99m,
             PackageQuantity = 1000,
             PackageUnit = MeasurementUnit.Millilitre,
@@ -75,14 +107,19 @@ public class CoreDataSchemaTests
     [Test]
     public async Task DeletingIngredient_CascadeDeletesItsPrices()
     {
-        var ingredient = new Ingredient { Name = "Chicken breast", BaseUnit = MeasurementUnit.Gram };
+        var store = new Store { Name = "CascadeStore", HouseholdId = _householdId };
+        _context.Stores.Add(store);
+        await _context.SaveChangesAsync();
+
+        var ingredient = new Ingredient { Name = "Chicken breast", BaseUnit = MeasurementUnit.Gram, HouseholdId = _householdId };
         _context.Ingredients.Add(ingredient);
         await _context.SaveChangesAsync();
 
         _context.IngredientPrices.Add(new IngredientPrice
         {
             IngredientId = ingredient.Id,
-            StoreId = 2,
+            StoreId = store.Id,
+            HouseholdId = _householdId,
             Price = 12.50m,
             PackageQuantity = 900,
             PackageUnit = MeasurementUnit.Gram,
@@ -99,13 +136,14 @@ public class CoreDataSchemaTests
     [Test]
     public async Task PantryItem_RoundTripsUnitAndLocation()
     {
-        var ingredient = new Ingredient { Name = "Frozen peas", BaseUnit = MeasurementUnit.Gram };
+        var ingredient = new Ingredient { Name = "Frozen peas", BaseUnit = MeasurementUnit.Gram, HouseholdId = _householdId };
         _context.Ingredients.Add(ingredient);
         await _context.SaveChangesAsync();
 
         _context.PantryItems.Add(new PantryItem
         {
             IngredientId = ingredient.Id,
+            HouseholdId = _householdId,
             QuantityOnHand = 750,
             Unit = MeasurementUnit.Gram,
             Location = StorageLocation.Freezer,
@@ -126,13 +164,14 @@ public class CoreDataSchemaTests
     [Test]
     public async Task DeletingIngredient_WithPantryItem_IsBlocked()
     {
-        var ingredient = new Ingredient { Name = "Canned beans", BaseUnit = MeasurementUnit.Each };
+        var ingredient = new Ingredient { Name = "Canned beans", BaseUnit = MeasurementUnit.Each, HouseholdId = _householdId };
         _context.Ingredients.Add(ingredient);
         await _context.SaveChangesAsync();
 
         _context.PantryItems.Add(new PantryItem
         {
             IngredientId = ingredient.Id,
+            HouseholdId = _householdId,
             QuantityOnHand = 4,
             Unit = MeasurementUnit.Each,
             Location = StorageLocation.Pantry,

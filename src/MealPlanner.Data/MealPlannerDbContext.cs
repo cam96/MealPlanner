@@ -60,6 +60,12 @@ public class MealPlannerDbContext(DbContextOptions<MealPlannerDbContext> options
     /// <summary>Gets the role assignments for application users.</summary>
     public DbSet<AppUserRole> AppUserRoles => Set<AppUserRole>();
 
+    /// <summary>Gets the households.</summary>
+    public DbSet<Household> Households => Set<Household>();
+
+    /// <summary>Gets the household invitations.</summary>
+    public DbSet<HouseholdInvite> HouseholdInvites => Set<HouseholdInvite>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

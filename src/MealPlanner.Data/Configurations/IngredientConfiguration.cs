@@ -12,7 +12,7 @@ public sealed class IngredientConfiguration : IEntityTypeConfiguration<Ingredien
     {
         builder.HasKey(i => i.Id);
         builder.Property(i => i.Name).IsRequired().HasMaxLength(200);
-        builder.HasIndex(i => i.Name);
+        builder.HasIndex(i => new { i.HouseholdId, i.Name });
 
         builder.Property(i => i.BaseUnit)
             .HasConversion<string>()
@@ -22,7 +22,12 @@ public sealed class IngredientConfiguration : IEntityTypeConfiguration<Ingredien
             .HasConversion<string>()
             .HasMaxLength(20);
 
-        builder.HasIndex(i => i.Category);
+        builder.HasIndex(i => new { i.HouseholdId, i.Category });
+
+        builder.HasOne(i => i.Household)
+            .WithMany()
+            .HasForeignKey(i => i.HouseholdId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasMany(i => i.Prices)
             .WithOne(p => p.Ingredient)

@@ -11,6 +11,12 @@ public class ManualShoppingItem
     /// <summary>Gets the surrogate primary key.</summary>
     public int Id { get; set; }
 
+    /// <summary>Gets or sets the identifier of the household this shopping item belongs to.</summary>
+    public int HouseholdId { get; set; }
+
+    /// <summary>Gets or sets the household this shopping item belongs to.</summary>
+    public Household? Household { get; set; }
+
     /// <summary>Gets or sets the calendar year of the shopping period.</summary>
     public int Year { get; set; }
 

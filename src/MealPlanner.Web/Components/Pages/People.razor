@@ -1,56 +1,162 @@
 @page "/people"
 @attribute [Authorize(Policy = "User")]
 @using MealPlanner.Web.Components.Dialogs
+@using MealPlanner.Contracts.Household
 @inject MealPlannerApiClient Api
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IJSRuntime JS
 
 <PageTitle>People - MealPlanner</PageTitle>
 
-<MudText Typo="Typo.h5" Class="mb-2 d-none d-sm-block">People &amp; goals</MudText>
+@if (_household is null && !_loading)
+{
+    <MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <MudText Typo="Typo.h5">Create your household</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText Typo="Typo.body1" Class="mb-4">
+                    A household groups users who share meals, recipes, and shopping lists together.
+                </MudText>
+                <MudTextField @bind-Value="_newHouseholdName"
+                              Label="Household name"
+                              Placeholder="e.g. The McKay Household"
+                              Variant="Variant.Outlined" />
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="@(string.IsNullOrWhiteSpace(_newHouseholdName))"
+                           OnClick="CreateHouseholdAsync">
+                    Create Household
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudContainer>
+}
+else
+{
+    @* Household members section *@
+    <MudText Typo="Typo.h5" Class="mb-2 d-none d-sm-block">@(_household?.Name ?? "People & goals")</MudText>
 
-<MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
-    Meals are planned to hit each person's daily nutrition targets.
-</MudText>
+    @if (_household is not null)
+    {
+        <MudExpansionPanels Class="mb-4" Elevation="1">
+            <MudExpansionPanel Text="Household members" Expanded="false">
+                <MudList T="HouseholdMemberDto" Dense="true">
+                    @foreach (var member in _household.Members)
+                    {
+                        <MudListItem T="HouseholdMemberDto">
+                            <div class="d-flex align-center justify-space-between">
+                                <div>
+                                    <MudText Typo="Typo.body1">
+                                        @member.Name
+                                        @if (member.IsOwner)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="ml-2">Owner</MudChip>
+                                        }
+                                    </MudText>
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@member.Email</MudText>
+                                </div>
+                                @if (_isOwner && !member.IsOwner)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.PersonRemove"
+                                                   Size="Size.Small"
+                                                   Color="Color.Error"
+                                                   OnClick="@(() => RemoveMemberAsync(member))" />
+                                }
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
 
-<MudDataGrid T="PersonDto"
-             Items="_people"
-             Loading="_loading"
-             Hover="true"
-             Elevation="1">
-    <Columns>
-        <PropertyColumn Property="p => p.Name" Title="Name" />
-        <PropertyColumn Property="p => p.DailyCalorieGoal" Title="Calories (kcal)" />
-        <PropertyColumn Property="p => p.DailyProteinGoal" Title="Protein (g)" />
-        <PropertyColumn Property="p => p.DailyFiberGoal" Title="Fibre (g)" />
-        <PropertyColumn Property="p => p.DailyCarbGoal" Title="Carbs (g)" />
-        <PropertyColumn Property="p => p.DailyFatGoal" Title="Fat (g)" />
-        <TemplateColumn CellClass="d-flex justify-end" Title="Actions" Sortable="false">
-            <CellTemplate>
-                <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                               Size="Size.Small"
-                               OnClick="@(() => OpenEditorAsync(context.Item))" />
-                <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                               Size="Size.Small"
-                               Color="Color.Error"
-                               OnClick="@(() => DeleteAsync(context.Item))" />
-            </CellTemplate>
-        </TemplateColumn>
-    </Columns>
-    <NoRecordsContent>
-        <MudText Class="pa-4">No people yet. Add the household members you're planning meals for.</MudText>
-    </NoRecordsContent>
-</MudDataGrid>
+                <MudDivider Class="my-2" />
 
-@* FAB — always reachable for adding *@
-<MudFab StartIcon="@Icons.Material.Filled.Add"
-        Color="Color.Primary"
-        Class="fab-bottom-right"
-        OnClick="@(() => OpenEditorAsync(null))" />
+                <div class="d-flex gap-2 pa-2">
+                    @if (_isOwner)
+                    {
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Link"
+                                   OnClick="CreateInviteAsync">
+                            Generate Invite Link
+                        </MudButton>
+                    }
+                    @if (!_isOwner)
+                    {
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Warning"
+                                   StartIcon="@Icons.Material.Filled.Logout"
+                                   OnClick="LeaveHouseholdAsync">
+                            Leave Household
+                        </MudButton>
+                    }
+                </div>
+
+                @if (_inviteUrl is not null)
+                {
+                    <MudAlert Severity="Severity.Success" Class="mx-2 mb-2" ShowCloseIcon="true" CloseIconClicked="() => _inviteUrl = null">
+                        <div class="d-flex align-center gap-2">
+                            <MudText Typo="Typo.body2" Style="word-break: break-all">@_inviteUrl</MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.ContentCopy"
+                                           Size="Size.Small"
+                                           OnClick="CopyInviteToClipboard" />
+                        </div>
+                    </MudAlert>
+                }
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+    }
+
+    <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+        Meals are planned to hit each person's daily nutrition targets.
+    </MudText>
+
+    <MudDataGrid T="PersonDto"
+                 Items="_people"
+                 Loading="_loading"
+                 Hover="true"
+                 Elevation="1">
+        <Columns>
+            <PropertyColumn Property="p => p.Name" Title="Name" />
+            <PropertyColumn Property="p => p.DailyCalorieGoal" Title="Calories (kcal)" />
+            <PropertyColumn Property="p => p.DailyProteinGoal" Title="Protein (g)" />
+            <PropertyColumn Property="p => p.DailyFiberGoal" Title="Fibre (g)" />
+            <PropertyColumn Property="p => p.DailyCarbGoal" Title="Carbs (g)" />
+            <PropertyColumn Property="p => p.DailyFatGoal" Title="Fat (g)" />
+            <TemplateColumn CellClass="d-flex justify-end" Title="Actions" Sortable="false">
+                <CellTemplate>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Size="Size.Small"
+                                   OnClick="@(() => OpenEditorAsync(context.Item))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Size="Size.Small"
+                                   Color="Color.Error"
+                                   OnClick="@(() => DeleteAsync(context.Item))" />
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+        <NoRecordsContent>
+            <MudText Class="pa-4">No people yet. Add the household members you're planning meals for.</MudText>
+        </NoRecordsContent>
+    </MudDataGrid>
+
+    @* FAB — always reachable for adding *@
+    <MudFab StartIcon="@Icons.Material.Filled.Add"
+            Color="Color.Primary"
+            Class="fab-bottom-right"
+            OnClick="@(() => OpenEditorAsync(null))" />
+}
 
 @code {
     private IReadOnlyList<PersonDto> _people = [];
+    private HouseholdDto? _household;
     private bool _loading = true;
+    private bool _isOwner;
+    private string _newHouseholdName = "";
+    private string? _inviteUrl;
 
     protected override async Task OnInitializedAsync() => await ReloadAsync();
 
@@ -59,11 +165,107 @@
         _loading = true;
         try
         {
-            _people = await Api.GetPeopleAsync();
+            _household = await Api.GetHouseholdAsync();
+            if (_household is not null)
+            {
+                _people = await Api.GetPeopleAsync();
+                _isOwner = _household.Members.Any(m => m.IsOwner && m.UserId == _household.OwnerId);
+            }
         }
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task CreateHouseholdAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newHouseholdName)) return;
+
+        try
+        {
+            _household = await Api.CreateHouseholdAsync(_newHouseholdName.Trim());
+            Snackbar.Add("Household created! Add people to start meal planning.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not create the household.", Severity.Error);
+        }
+    }
+
+    private async Task CreateInviteAsync()
+    {
+        try
+        {
+            var invite = await Api.CreateInviteAsync();
+            _inviteUrl = invite?.InviteUrl;
+            if (_inviteUrl is not null)
+            {
+                Snackbar.Add("Invite link generated! Share it with someone to join your household.", Severity.Success);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not create an invite.", Severity.Error);
+        }
+    }
+
+    private async Task CopyInviteToClipboard()
+    {
+        if (_inviteUrl is not null)
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _inviteUrl);
+            Snackbar.Add("Invite link copied to clipboard.", Severity.Info);
+        }
+    }
+
+    private async Task RemoveMemberAsync(HouseholdMemberDto member)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Remove member",
+            MarkupMessage = new MarkupString($"Remove <strong>{member.Name}</strong> from the household? They will lose access to shared data."),
+            YesText = "Remove",
+            CancelText = "Cancel",
+        });
+
+        if (confirmed != true) return;
+
+        try
+        {
+            await Api.RemoveMemberAsync(member.UserId);
+            Snackbar.Add($"Removed {member.Name} from the household.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not remove the member.", Severity.Error);
+        }
+    }
+
+    private async Task LeaveHouseholdAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Leave household",
+            MarkupMessage = new MarkupString("Are you sure you want to leave this household? You will lose access to all shared data."),
+            YesText = "Leave",
+            CancelText = "Cancel",
+        });
+
+        if (confirmed != true) return;
+
+        try
+        {
+            await Api.LeaveHouseholdAsync();
+            Snackbar.Add("You have left the household.", Severity.Info);
+            _household = null;
+            _people = [];
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Could not leave the household.", Severity.Error);
         }
     }
 

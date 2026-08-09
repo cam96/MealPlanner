@@ -13,6 +13,13 @@ public sealed class MealComboConfiguration : IEntityTypeConfiguration<MealCombo>
         builder.HasKey(c => c.Id);
         builder.Property(c => c.Name).IsRequired().HasMaxLength(200);
 
+        builder.HasOne(c => c.Household)
+            .WithMany()
+            .HasForeignKey(c => c.HouseholdId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(c => c.HouseholdId);
+
         // A combo references interchangeable ingredients. Deleting an ingredient that a combo points
         // at should clear the slot rather than block the delete, since combos are informal.
         builder.HasOne(c => c.ProteinIngredient)

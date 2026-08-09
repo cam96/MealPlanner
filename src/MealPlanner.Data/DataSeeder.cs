@@ -34,32 +34,70 @@ public static class DataSeeder
 
         logger.LogInformation("Seeding demo data (empty database detected).");
 
-        context.People.AddRange(
-            new Person { Name = "Me", DailyCalorieGoal = 2200, DailyProteinGoal = 130, DailyFiberGoal = 35, DailyCarbGoal = 250, DailyFatGoal = 70 },
-            new Person { Name = "Michelle", DailyCalorieGoal = 1900, DailyProteinGoal = 110, DailyFiberGoal = 30, DailyCarbGoal = 210, DailyFatGoal = 60 });
+        // Ensure a default household exists for demo data.
+        var household = await context.Households.FirstOrDefaultAsync(cancellationToken);
+        if (household is null)
+        {
+            var user = new AppUser
+            {
+                GoogleId = "demo-user",
+                Email = "demo@example.com",
+                Name = "Demo User",
+                CreatedAt = DateTime.UtcNow,
+                LastLoginAt = DateTime.UtcNow,
+            };
+            context.AppUsers.Add(user);
+            await context.SaveChangesAsync(cancellationToken);
 
-        var oats = new Ingredient { Name = "Rolled oats", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Carbohydrate, CaloriesPer100 = 379, ProteinPer100 = 13, FiberPer100 = 10, CarbsPer100 = 67, FatPer100 = 7 };
-        var chicken = new Ingredient { Name = "Chicken breast", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Protein, CaloriesPer100 = 165, ProteinPer100 = 31, FiberPer100 = 0, CarbsPer100 = 0, FatPer100 = 4 };
-        var rice = new Ingredient { Name = "Brown rice (dry)", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Carbohydrate, CaloriesPer100 = 367, ProteinPer100 = 8, FiberPer100 = 4, CarbsPer100 = 76, FatPer100 = 3 };
-        var broccoli = new Ingredient { Name = "Broccoli", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Vegetable, CaloriesPer100 = 34, ProteinPer100 = 3, FiberPer100 = 3, CarbsPer100 = 7, FatPer100 = 0 };
-        var egg = new Ingredient { Name = "Egg", BaseUnit = MeasurementUnit.Each, Category = FoodCategory.Protein, CaloriesPer100 = 143, ProteinPer100 = 13, FiberPer100 = 0, CarbsPer100 = 1, FatPer100 = 10, ServingWeightG = 50 };
-        var milk = new Ingredient { Name = "Milk", BaseUnit = MeasurementUnit.Millilitre, CaloriesPer100 = 61, ProteinPer100 = 3, FiberPer100 = 0, CarbsPer100 = 5, FatPer100 = 3 };
+            household = new Household
+            {
+                Name = "Demo Household",
+                OwnerId = user.Id,
+                CreatedAt = DateTime.UtcNow,
+            };
+            context.Households.Add(household);
+            await context.SaveChangesAsync(cancellationToken);
+
+            user.HouseholdId = household.Id;
+            await context.SaveChangesAsync(cancellationToken);
+        }
+
+        var householdId = household.Id;
+
+        // Create stores referenced by ingredient prices.
+        var store1 = new Store { Name = "Costco", HouseholdId = householdId };
+        var store2 = new Store { Name = "Superstore", HouseholdId = householdId };
+        var store3 = new Store { Name = "Safeway", HouseholdId = householdId };
+        context.Stores.AddRange(store1, store2, store3);
+        await context.SaveChangesAsync(cancellationToken);
+
+        context.People.AddRange(
+            new Person { Name = "Me", HouseholdId = householdId, DailyCalorieGoal = 2200, DailyProteinGoal = 130, DailyFiberGoal = 35, DailyCarbGoal = 250, DailyFatGoal = 70 },
+            new Person { Name = "Michelle", HouseholdId = householdId, DailyCalorieGoal = 1900, DailyProteinGoal = 110, DailyFiberGoal = 30, DailyCarbGoal = 210, DailyFatGoal = 60 });
+
+        var oats = new Ingredient { Name = "Rolled oats", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Carbohydrate, HouseholdId = householdId, CaloriesPer100 = 379, ProteinPer100 = 13, FiberPer100 = 10, CarbsPer100 = 67, FatPer100 = 7 };
+        var chicken = new Ingredient { Name = "Chicken breast", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Protein, HouseholdId = householdId, CaloriesPer100 = 165, ProteinPer100 = 31, FiberPer100 = 0, CarbsPer100 = 0, FatPer100 = 4 };
+        var rice = new Ingredient { Name = "Brown rice (dry)", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Carbohydrate, HouseholdId = householdId, CaloriesPer100 = 367, ProteinPer100 = 8, FiberPer100 = 4, CarbsPer100 = 76, FatPer100 = 3 };
+        var broccoli = new Ingredient { Name = "Broccoli", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Vegetable, HouseholdId = householdId, CaloriesPer100 = 34, ProteinPer100 = 3, FiberPer100 = 3, CarbsPer100 = 7, FatPer100 = 0 };
+        var egg = new Ingredient { Name = "Egg", BaseUnit = MeasurementUnit.Each, Category = FoodCategory.Protein, HouseholdId = householdId, CaloriesPer100 = 143, ProteinPer100 = 13, FiberPer100 = 0, CarbsPer100 = 1, FatPer100 = 10, ServingWeightG = 50 };
+        var milk = new Ingredient { Name = "Milk", BaseUnit = MeasurementUnit.Millilitre, HouseholdId = householdId, CaloriesPer100 = 61, ProteinPer100 = 3, FiberPer100 = 0, CarbsPer100 = 5, FatPer100 = 3 };
 
         context.Ingredients.AddRange(oats, chicken, rice, broccoli, egg, milk);
 
         var today = DateOnly.FromDateTime(DateTime.Today);
         context.IngredientPrices.AddRange(
-            Price(oats, storeId: 1, price: 6.49m, packageQuantity: 1000, MeasurementUnit.Gram, today),
-            Price(chicken, storeId: 1, price: 13.99m, packageQuantity: 1000, MeasurementUnit.Gram, today),
-            Price(rice, storeId: 2, price: 4.29m, packageQuantity: 900, MeasurementUnit.Gram, today),
-            Price(broccoli, storeId: 2, price: 3.49m, packageQuantity: 500, MeasurementUnit.Gram, today),
-            Price(egg, storeId: 3, price: 4.99m, packageQuantity: 12, MeasurementUnit.Each, today),
-            Price(milk, storeId: 2, price: 2.79m, packageQuantity: 2000, MeasurementUnit.Millilitre, today));
+            Price(oats, store1.Id, price: 6.49m, packageQuantity: 1000, MeasurementUnit.Gram, today, householdId),
+            Price(chicken, store1.Id, price: 13.99m, packageQuantity: 1000, MeasurementUnit.Gram, today, householdId),
+            Price(rice, store2.Id, price: 4.29m, packageQuantity: 900, MeasurementUnit.Gram, today, householdId),
+            Price(broccoli, store2.Id, price: 3.49m, packageQuantity: 500, MeasurementUnit.Gram, today, householdId),
+            Price(egg, store3.Id, price: 4.99m, packageQuantity: 12, MeasurementUnit.Each, today, householdId),
+            Price(milk, store2.Id, price: 2.79m, packageQuantity: 2000, MeasurementUnit.Millilitre, today, householdId));
 
         context.Recipes.AddRange(
             new Recipe
             {
                 Name = "Overnight oats",
+                HouseholdId = householdId,
                 MealType = MealType.Breakfast,
                 PrepMinutes = 5,
                 CookMinutes = 0,
@@ -74,6 +112,7 @@ public static class DataSeeder
             new Recipe
             {
                 Name = "Chicken, rice & broccoli",
+                HouseholdId = householdId,
                 MealType = MealType.Dinner,
                 PrepMinutes = 15,
                 CookMinutes = 25,
@@ -89,6 +128,7 @@ public static class DataSeeder
             new Recipe
             {
                 Name = "Veggie omelette",
+                HouseholdId = householdId,
                 MealType = MealType.Lunch,
                 PrepMinutes = 5,
                 CookMinutes = 10,
@@ -102,19 +142,20 @@ public static class DataSeeder
             });
 
         context.PantryItems.AddRange(
-            new PantryItem { Ingredient = rice, QuantityOnHand = 900, Unit = MeasurementUnit.Gram, Location = StorageLocation.Pantry },
-            new PantryItem { Ingredient = oats, QuantityOnHand = 500, Unit = MeasurementUnit.Gram, Location = StorageLocation.Pantry },
-            new PantryItem { Ingredient = chicken, QuantityOnHand = 500, Unit = MeasurementUnit.Gram, Location = StorageLocation.Freezer });
+            new PantryItem { Ingredient = rice, HouseholdId = householdId, QuantityOnHand = 900, Unit = MeasurementUnit.Gram, Location = StorageLocation.Pantry },
+            new PantryItem { Ingredient = oats, HouseholdId = householdId, QuantityOnHand = 500, Unit = MeasurementUnit.Gram, Location = StorageLocation.Pantry },
+            new PantryItem { Ingredient = chicken, HouseholdId = householdId, QuantityOnHand = 500, Unit = MeasurementUnit.Gram, Location = StorageLocation.Freezer });
 
         context.MealCombos.Add(new MealCombo
         {
             Name = "Chicken + rice + broccoli",
+            HouseholdId = householdId,
             ProteinIngredient = chicken,
             CarbohydrateIngredient = rice,
             VegetableIngredient = broccoli,
         });
 
-        context.AppSettings.Add(new AppSetting { Key = MonthlyBudgetKey, Value = "850" });
+        context.AppSettings.Add(new AppSetting { HouseholdId = householdId, Key = MonthlyBudgetKey, Value = "850" });
 
         await context.SaveChangesAsync(cancellationToken);
         logger.LogInformation("Demo data seeded.");
@@ -127,10 +168,12 @@ public static class DataSeeder
         decimal price,
         double packageQuantity,
         MeasurementUnit packageUnit,
-        DateOnly recordedDate) => new()
+        DateOnly recordedDate,
+        int householdId) => new()
         {
             Ingredient = ingredient,
             StoreId = storeId,
+            HouseholdId = householdId,
             Price = price,
             PackageQuantity = packageQuantity,
             PackageUnit = packageUnit,

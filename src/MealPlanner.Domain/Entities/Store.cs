@@ -9,6 +9,12 @@ public class Store
     /// <summary>Gets the surrogate primary key.</summary>
     public int Id { get; set; }
 
+    /// <summary>Gets or sets the identifier of the household this store belongs to.</summary>
+    public int HouseholdId { get; set; }
+
+    /// <summary>Gets or sets the household this store belongs to.</summary>
+    public Household? Household { get; set; }
+
     /// <summary>Gets or sets the store's display name.</summary>
     public required string Name { get; set; }
 

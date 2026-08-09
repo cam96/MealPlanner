@@ -1,0 +1,115 @@
+@page "/invite/{Token}"
+@attribute [Authorize(Policy = "User")]
+@inject MealPlannerApiClient Api
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Join Household - MealPlanner</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else if (_preview is null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">
+            This invitation was not found or is no longer valid.
+        </MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/">Go Home</MudButton>
+    }
+    else if (_preview.IsExpired)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            This invitation expired on @_preview.ExpiresAt.ToLocalTime().ToString("g").
+        </MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/">Go Home</MudButton>
+    }
+    else if (_preview.IsAlreadyAccepted)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            This invitation has already been accepted.
+        </MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/">Go Home</MudButton>
+    }
+    else if (_alreadyInHousehold)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            You already belong to a household. Leave your current household before accepting this invitation.
+        </MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/people">Go to Household</MudButton>
+    }
+    else
+    {
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <MudText Typo="Typo.h5">You're invited!</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText Typo="Typo.body1" Class="mb-2">
+                    <strong>@_preview.InvitedByName</strong> has invited you to join the household
+                    <strong>@_preview.HouseholdName</strong>.
+                </MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    This invite expires on @_preview.ExpiresAt.ToLocalTime().ToString("g").
+                </MudText>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Disabled="_joining"
+                           OnClick="AcceptAsync">
+                    @if (_joining)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    Join Household
+                </MudButton>
+                <MudButton Variant="Variant.Text" Href="/">Cancel</MudButton>
+            </MudCardActions>
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+
+    private InvitePreviewDto? _preview;
+    private bool _loading = true;
+    private bool _joining;
+    private bool _alreadyInHousehold;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _preview = await Api.PreviewInviteAsync(Token);
+
+            if (_preview is not null && !_preview.IsExpired && !_preview.IsAlreadyAccepted)
+            {
+                var household = await Api.GetHouseholdAsync();
+                _alreadyInHousehold = household is not null;
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task AcceptAsync()
+    {
+        _joining = true;
+        try
+        {
+            await Api.AcceptInviteAsync(Token);
+            Snackbar.Add($"Welcome to {_preview!.HouseholdName}!", Severity.Success);
+            Navigation.NavigateTo("/people", forceLoad: true);
+        }
+        catch (HttpRequestException ex)
+        {
+            Snackbar.Add(ex.Message ?? "Could not join the household.", Severity.Error);
+            _joining = false;
+        }
+    }
+}

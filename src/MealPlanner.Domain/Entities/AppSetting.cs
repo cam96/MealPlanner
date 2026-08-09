@@ -6,6 +6,12 @@ namespace MealPlanner.Domain.Entities;
 /// </summary>
 public class AppSetting
 {
+    /// <summary>Gets or sets the identifier of the household this setting belongs to.</summary>
+    public int HouseholdId { get; set; }
+
+    /// <summary>Gets or sets the household this setting belongs to.</summary>
+    public Household? Household { get; set; }
+
     /// <summary>Gets or sets the unique setting key.</summary>
     public required string Key { get; set; }
 

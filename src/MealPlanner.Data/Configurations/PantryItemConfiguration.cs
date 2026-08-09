@@ -12,6 +12,11 @@ public sealed class PantryItemConfiguration : IEntityTypeConfiguration<PantryIte
     {
         builder.HasKey(p => p.Id);
 
+        builder.HasOne(p => p.Household)
+            .WithMany()
+            .HasForeignKey(p => p.HouseholdId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.Property(p => p.Unit)
             .HasConversion<string>()
             .HasMaxLength(20);

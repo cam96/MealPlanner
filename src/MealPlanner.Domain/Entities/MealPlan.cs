@@ -9,6 +9,12 @@ public class MealPlan
     /// <summary>Gets the surrogate primary key.</summary>
     public int Id { get; set; }
 
+    /// <summary>Gets or sets the identifier of the household this meal plan belongs to.</summary>
+    public int HouseholdId { get; set; }
+
+    /// <summary>Gets or sets the household this meal plan belongs to.</summary>
+    public Household? Household { get; set; }
+
     /// <summary>Gets or sets the calendar year the plan covers.</summary>
     public int Year { get; set; }
 

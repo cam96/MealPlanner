@@ -67,6 +67,8 @@ public sealed class RoleAuthorizationTests
 
     /// <summary>
     /// A token with the "User" role should be accepted by standard business endpoints.
+    /// Endpoints may return 403 if the user has no household (business rule), so we first
+    /// provision the user and create a household.
     /// </summary>
     [TestCase("/api/people")]
     [TestCase("/api/stores")]
@@ -78,6 +80,12 @@ public sealed class RoleAuthorizationTests
     public async Task ProtectedEndpoint_WithUserRole_DoesNotReturnForbidden(string url)
     {
         using var client = CreateClient("User");
+
+        // Provision the user and create a household so the endpoint doesn't reject with "no household".
+        await client.PostAsync("/api/auth/ensure-user", null);
+        // Ignore conflict if household already exists from a previous test case.
+        await client.PostAsJsonAsync("/api/household", new { Name = "Test Household" });
+
         var response = await client.GetAsync(url);
 
         Assert.That(response.StatusCode, Is.Not.EqualTo(HttpStatusCode.Forbidden));

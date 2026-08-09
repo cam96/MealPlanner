@@ -12,6 +12,11 @@ public sealed class IngredientPriceConfiguration : IEntityTypeConfiguration<Ingr
     {
         builder.HasKey(p => p.Id);
 
+        builder.HasOne(p => p.Household)
+            .WithMany()
+            .HasForeignKey(p => p.HouseholdId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.Property(p => p.Price)
             .HasColumnType("TEXT")
             .HasPrecision(10, 2);

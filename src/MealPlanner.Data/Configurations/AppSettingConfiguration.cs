@@ -10,10 +10,14 @@ public sealed class AppSettingConfiguration : IEntityTypeConfiguration<AppSettin
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<AppSetting> builder)
     {
-        builder.HasKey(s => s.Key);
+        builder.HasKey(s => new { s.HouseholdId, s.Key });
 
         builder.Property(s => s.Key).HasMaxLength(100);
-
         builder.Property(s => s.Value).HasMaxLength(500);
+
+        builder.HasOne(s => s.Household)
+            .WithMany()
+            .HasForeignKey(s => s.HouseholdId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

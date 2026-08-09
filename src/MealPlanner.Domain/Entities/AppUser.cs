@@ -23,6 +23,12 @@ public class AppUser
     /// <summary>Gets or sets the UTC timestamp of the user's most recent login.</summary>
     public DateTime LastLoginAt { get; set; }
 
+    /// <summary>Gets or sets the identifier of the household this user belongs to, or null if unaffiliated.</summary>
+    public int? HouseholdId { get; set; }
+
+    /// <summary>Gets or sets the household this user belongs to.</summary>
+    public Household? Household { get; set; }
+
     /// <summary>Gets the collection of roles assigned to this user.</summary>
     public ICollection<AppUserRole> UserRoles { get; set; } = [];
 }

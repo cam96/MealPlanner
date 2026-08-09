@@ -12,11 +12,11 @@ public sealed class StoreConfiguration : IEntityTypeConfiguration<Store>
     {
         builder.HasKey(s => s.Id);
         builder.Property(s => s.Name).IsRequired().HasMaxLength(100);
-        builder.HasIndex(s => s.Name).IsUnique();
+        builder.HasIndex(s => new { s.HouseholdId, s.Name }).IsUnique();
 
-        builder.HasData(
-            new Store { Id = 1, Name = "Costco" },
-            new Store { Id = 2, Name = "Superstore" },
-            new Store { Id = 3, Name = "Safeway" });
+        builder.HasOne(s => s.Household)
+            .WithMany()
+            .HasForeignKey(s => s.HouseholdId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

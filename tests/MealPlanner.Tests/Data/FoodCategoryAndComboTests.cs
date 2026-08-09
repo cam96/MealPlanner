@@ -14,6 +14,7 @@ public class FoodCategoryAndComboTests
 {
     private SqliteConnection _connection = default!;
     private MealPlannerDbContext _context = default!;
+    private int _householdId;
 
     [SetUp]
     public async Task SetUpAsync()
@@ -27,6 +28,32 @@ public class FoodCategoryAndComboTests
             .Options;
         _context = new MealPlannerDbContext(options);
         await _context.Database.MigrateAsync();
+
+        // Create a test user and household for entities that require HouseholdId.
+        var user = new AppUser
+        {
+            GoogleId = "test-google-id",
+            Email = "test@example.com",
+            Name = "Test User",
+            CreatedAt = DateTime.UtcNow,
+            LastLoginAt = DateTime.UtcNow,
+        };
+        _context.AppUsers.Add(user);
+        await _context.SaveChangesAsync();
+
+        var household = new Household
+        {
+            Name = "Test Household",
+            OwnerId = user.Id,
+            CreatedAt = DateTime.UtcNow,
+        };
+        _context.Households.Add(household);
+        await _context.SaveChangesAsync();
+
+        user.HouseholdId = household.Id;
+        await _context.SaveChangesAsync();
+
+        _householdId = household.Id;
     }
 
     [TearDown]
@@ -44,6 +71,7 @@ public class FoodCategoryAndComboTests
             Name = "Chicken breast",
             BaseUnit = MeasurementUnit.Gram,
             Category = FoodCategory.Protein,
+            HouseholdId = _householdId,
         };
         _context.Ingredients.Add(ingredient);
         await _context.SaveChangesAsync();
@@ -57,7 +85,7 @@ public class FoodCategoryAndComboTests
     [Test]
     public async Task Ingredient_DefaultsToNoneCategory()
     {
-        var ingredient = new Ingredient { Name = "Olive oil", BaseUnit = MeasurementUnit.Millilitre };
+        var ingredient = new Ingredient { Name = "Olive oil", BaseUnit = MeasurementUnit.Millilitre, HouseholdId = _householdId };
         _context.Ingredients.Add(ingredient);
         await _context.SaveChangesAsync();
         _context.ChangeTracker.Clear();
@@ -70,15 +98,16 @@ public class FoodCategoryAndComboTests
     [Test]
     public async Task MealCombo_RoundTripsIngredientReferences()
     {
-        var protein = new Ingredient { Name = "Chicken", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Protein };
-        var carb = new Ingredient { Name = "Rice", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Carbohydrate };
-        var veg = new Ingredient { Name = "Broccoli", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Vegetable };
+        var protein = new Ingredient { Name = "Chicken", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Protein, HouseholdId = _householdId };
+        var carb = new Ingredient { Name = "Rice", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Carbohydrate, HouseholdId = _householdId };
+        var veg = new Ingredient { Name = "Broccoli", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Vegetable, HouseholdId = _householdId };
         _context.Ingredients.AddRange(protein, carb, veg);
         await _context.SaveChangesAsync();
 
         _context.MealCombos.Add(new MealCombo
         {
             Name = "Chicken + rice + broccoli",
+            HouseholdId = _householdId,
             ProteinIngredientId = protein.Id,
             CarbohydrateIngredientId = carb.Id,
             VegetableIngredientId = veg.Id,
@@ -104,14 +133,15 @@ public class FoodCategoryAndComboTests
     [Test]
     public async Task DeletingIngredient_UsedByCombo_SetsReferenceToNull()
     {
-        var protein = new Ingredient { Name = "Tofu", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Protein };
-        var carb = new Ingredient { Name = "Quinoa", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Carbohydrate };
+        var protein = new Ingredient { Name = "Tofu", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Protein, HouseholdId = _householdId };
+        var carb = new Ingredient { Name = "Quinoa", BaseUnit = MeasurementUnit.Gram, Category = FoodCategory.Carbohydrate, HouseholdId = _householdId };
         _context.Ingredients.AddRange(protein, carb);
         await _context.SaveChangesAsync();
 
         _context.MealCombos.Add(new MealCombo
         {
             Name = "Tofu + quinoa",
+            HouseholdId = _householdId,
             ProteinIngredientId = protein.Id,
             CarbohydrateIngredientId = carb.Id,
         });
@@ -135,11 +165,11 @@ public class FoodCategoryAndComboTests
     [Test]
     public async Task DeletingCombo_UsedByPlannedMeal_IsBlocked()
     {
-        var combo = new MealCombo { Name = "Simple dinner" };
+        var combo = new MealCombo { Name = "Simple dinner", HouseholdId = _householdId };
         _context.MealCombos.Add(combo);
         await _context.SaveChangesAsync();
 
-        var plan = new MealPlan { Year = 2026, Month = 1 };
+        var plan = new MealPlan { Year = 2026, Month = 1, HouseholdId = _householdId };
         var day = new DayPlan { Date = new DateOnly(2026, 1, 5), DayType = DayType.Normal };
         day.Meals.Add(new PlannedMeal
         {
@@ -162,11 +192,11 @@ public class FoodCategoryAndComboTests
     [Test]
     public async Task PlannedMeal_RoundTripsComboReference()
     {
-        var combo = new MealCombo { Name = "Leftovers night" };
+        var combo = new MealCombo { Name = "Leftovers night", HouseholdId = _householdId };
         _context.MealCombos.Add(combo);
         await _context.SaveChangesAsync();
 
-        var plan = new MealPlan { Year = 2026, Month = 2 };
+        var plan = new MealPlan { Year = 2026, Month = 2, HouseholdId = _householdId };
         var day = new DayPlan { Date = new DateOnly(2026, 2, 3), DayType = DayType.Normal };
         day.Meals.Add(new PlannedMeal
         {

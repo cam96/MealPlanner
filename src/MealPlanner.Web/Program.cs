@@ -90,6 +90,12 @@ builder.Services.AddAuthentication(options =>
                         {
                             identity.AddClaim(new Claim(ClaimTypes.Role, role));
                         }
+
+                        if (rolesResponse.HouseholdId is not null)
+                        {
+                            identity.AddClaim(new Claim("HouseholdId", rolesResponse.HouseholdId.Value.ToString()));
+                        }
+
                         return;
                     }
                 }

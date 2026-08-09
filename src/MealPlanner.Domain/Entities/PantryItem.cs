@@ -9,6 +9,12 @@ public class PantryItem
     /// <summary>Gets the surrogate primary key.</summary>
     public int Id { get; set; }
 
+    /// <summary>Gets or sets the identifier of the household this pantry item belongs to.</summary>
+    public int HouseholdId { get; set; }
+
+    /// <summary>Gets or sets the household this pantry item belongs to.</summary>
+    public Household? Household { get; set; }
+
     /// <summary>Gets or sets the identifier of the ingredient held.</summary>
     public int IngredientId { get; set; }
 

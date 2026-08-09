@@ -72,6 +72,6 @@ public static class AuthEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         var roles = appUser.UserRoles.Select(r => r.Role).ToList();
-        return TypedResults.Ok(new UserRolesResponse(roles));
+        return TypedResults.Ok(new UserRolesResponse(roles, appUser.HouseholdId));
     }
 }

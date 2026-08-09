@@ -8,6 +8,12 @@ public class Person
     /// <summary>Gets the surrogate primary key.</summary>
     public int Id { get; set; }
 
+    /// <summary>Gets or sets the identifier of the household this person belongs to.</summary>
+    public int HouseholdId { get; set; }
+
+    /// <summary>Gets or sets the household this person belongs to.</summary>
+    public Household? Household { get; set; }
+
     /// <summary>Gets or sets the person's display name (for example "Me" or "Partner").</summary>
     public required string Name { get; set; }
 
