@@ -6,6 +6,7 @@ using MealPlanner.Domain.Entities;
 using MealPlanner.Domain.Nutrition;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using MealPlanner.ServiceDefaults.Authorization;
 
 namespace MealPlanner.Api.Endpoints;
 
@@ -19,7 +20,7 @@ public static class RecipesEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/recipes").WithTags("Recipes").RequireAuthorization();
+        var group = app.MapGroup("/api/recipes").WithTags("Recipes").RequireAuthorization(AuthorizationPolicies.User);
 
         group.MapGet("/", GetAllAsync);
         group.MapGet("/{id:int}", GetByIdAsync);

@@ -141,6 +141,58 @@ public sealed class JwtAuthorizationHandlerTests
         Assert.Throws<ArgumentNullException>(() => new JwtAuthorizationHandler(accessor, null!));
     }
 
+    [Test]
+    public async Task SendAsync_UserWithRoles_IncludesRoleClaimsInToken()
+    {
+        // Arrange
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "google-123"),
+            new Claim(ClaimTypes.Name, "Test User"),
+            new Claim(ClaimTypes.Email, "test@example.com"),
+            new Claim(ClaimTypes.Role, "User"),
+            new Claim(ClaimTypes.Role, "Admin"),
+        };
+        var identity = new ClaimsIdentity(claims, "Test");
+        var principal = new ClaimsPrincipal(identity);
+
+        var httpContext = new DefaultHttpContext { User = principal };
+        var accessor = new FakeHttpContextAccessor(httpContext);
+
+        var handler = new JwtAuthorizationHandler(accessor, _settings)
+        {
+            InnerHandler = new FakeInnerHandler(),
+        };
+
+        var client = new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
+
+        // Act
+        await client.GetAsync("/test");
+
+        // Assert — validate that the token contains role claims
+        var authHeader = ((FakeInnerHandler)handler.InnerHandler).LastRequest?.Headers.Authorization;
+        Assert.That(authHeader, Is.Not.Null);
+
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var result = await tokenHandler.ValidateTokenAsync(authHeader!.Parameter!, new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = Issuer,
+            ValidAudience = Audience,
+            IssuerSigningKey = _settings.Key,
+            RoleClaimType = ClaimTypes.Role,
+        });
+
+        Assert.That(result.IsValid, Is.True);
+
+        var roleClaims = result.ClaimsIdentity.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
+        Assert.That(roleClaims, Does.Contain("User"));
+        Assert.That(roleClaims, Does.Contain("Admin"));
+    }
+
     private sealed class FakeHttpContextAccessor(HttpContext? context) : IHttpContextAccessor
     {
         public HttpContext? HttpContext { get; set; } = context;

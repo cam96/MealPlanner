@@ -1,5 +1,5 @@
 @page "/prices"
-@attribute [Authorize]
+@attribute [Authorize(Policy = "User")]
 @using MealPlanner.Web.Components.Dialogs
 @inject MealPlannerApiClient Api
 @inject IDialogService DialogService

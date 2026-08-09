@@ -1,5 +1,5 @@
-﻿@page "/"
-@attribute [Authorize]
+@page "/"
+@attribute [Authorize(Policy = "User")]
 @using System.Globalization
 @inject MealPlannerApiClient Api
 @inject ISnackbar Snackbar

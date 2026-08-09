@@ -4,6 +4,7 @@ using MealPlanner.Data;
 using MealPlanner.Domain.Entities;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using MealPlanner.ServiceDefaults.Authorization;
 
 namespace MealPlanner.Api.Endpoints;
 
@@ -20,7 +21,7 @@ public static class CombosEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/combos").WithTags("Combos").RequireAuthorization();
+        var group = app.MapGroup("/api/combos").WithTags("Combos").RequireAuthorization(AuthorizationPolicies.User);
 
         group.MapGet("/board", GetBoardAsync);
         group.MapGet("/", GetAllAsync);

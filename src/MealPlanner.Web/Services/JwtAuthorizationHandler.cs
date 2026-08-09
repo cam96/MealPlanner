@@ -47,12 +47,18 @@ public sealed class JwtAuthorizationHandler : DelegatingHandler
         var now = DateTime.UtcNow;
         var expires = now.Add(_settings.Lifetime);
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, user.FindFirstValue(ClaimTypes.NameIdentifier) ?? ""),
-            new Claim(JwtRegisteredClaimNames.Name, user.FindFirstValue(ClaimTypes.Name) ?? ""),
-            new Claim(JwtRegisteredClaimNames.Email, user.FindFirstValue(ClaimTypes.Email) ?? ""),
+            new(JwtRegisteredClaimNames.Sub, user.FindFirstValue(ClaimTypes.NameIdentifier) ?? ""),
+            new(JwtRegisteredClaimNames.Name, user.FindFirstValue(ClaimTypes.Name) ?? ""),
+            new(JwtRegisteredClaimNames.Email, user.FindFirstValue(ClaimTypes.Email) ?? ""),
         };
+
+        // Include all role claims so the API can enforce role-based authorization policies.
+        foreach (var roleClaim in user.FindAll(ClaimTypes.Role))
+        {
+            claims.Add(new Claim(ClaimTypes.Role, roleClaim.Value));
+        }
 
         var credentials = new SigningCredentials(_settings.Key, SecurityAlgorithms.HmacSha256);
 

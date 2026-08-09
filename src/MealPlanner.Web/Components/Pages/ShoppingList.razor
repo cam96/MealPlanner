@@ -1,5 +1,5 @@
 @page "/shopping-list"
-@attribute [Authorize]
+@attribute [Authorize(Policy = "User")]
 @using System.Globalization
 @using MealPlanner.Web.Components.Dialogs
 @inject MealPlannerApiClient Api

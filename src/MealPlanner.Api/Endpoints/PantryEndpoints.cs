@@ -4,6 +4,7 @@ using MealPlanner.Data;
 using MealPlanner.Domain.Entities;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using MealPlanner.ServiceDefaults.Authorization;
 
 namespace MealPlanner.Api.Endpoints;
 
@@ -17,7 +18,7 @@ public static class PantryEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/pantry").WithTags("Pantry").RequireAuthorization();
+        var group = app.MapGroup("/api/pantry").WithTags("Pantry").RequireAuthorization(AuthorizationPolicies.User);
 
         group.MapGet("/", GetAllAsync);
         group.MapGet("/{id:int}", GetByIdAsync);

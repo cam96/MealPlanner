@@ -5,6 +5,7 @@ using MealPlanner.Domain.Reporting;
 using MealPlanner.Domain.Shopping;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using MealPlanner.ServiceDefaults.Authorization;
 
 namespace MealPlanner.Api.Endpoints;
 
@@ -19,7 +20,7 @@ public static class DashboardEndpoints
         ArgumentNullException.ThrowIfNull(app);
 
         app.MapGet("/api/plans/{year:int}/{month:int}/dashboard", GetAsync)
-            .WithTags("Dashboard").RequireAuthorization();
+            .WithTags("Dashboard").RequireAuthorization(AuthorizationPolicies.User);
 
         return app;
     }
