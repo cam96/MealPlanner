@@ -1,3 +1,4 @@
+using MealPlanner.Api.Household;
 using MealPlanner.Contracts.Reporting;
 using MealPlanner.Data;
 using MealPlanner.Domain.Entities;
@@ -25,12 +26,16 @@ public static class DashboardEndpoints
         return app;
     }
 
-    private static async Task<Results<Ok<DashboardDto>, ValidationProblem>> GetAsync(
+    private static async Task<IResult> GetAsync(
         int year,
         int month,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         if (month is < 1 or > 12 || year is < 1 or > 9999)
         {
             return TypedResults.ValidationProblem(new Dictionary<string, string[]>
@@ -39,10 +44,11 @@ public static class DashboardEndpoints
             });
         }
 
-        var budget = await SettingsEndpoints.GetMonthlyBudgetAsync(db, cancellationToken);
+        var budget = await SettingsEndpoints.GetMonthlyBudgetAsync(db, householdId, cancellationToken);
 
         var people = await db.People
             .AsNoTracking()
+            .Where(p => p.HouseholdId == householdId)
             .OrderBy(p => p.Id)
             .ToListAsync(cancellationToken);
 
@@ -53,16 +59,18 @@ public static class DashboardEndpoints
                     .ThenInclude(m => m.Recipe!)
                         .ThenInclude(r => r.Ingredients)
                             .ThenInclude(ri => ri.Ingredient)
-            .FirstOrDefaultAsync(p => p.Year == year && p.Month == month, cancellationToken)
+            .FirstOrDefaultAsync(p => p.Year == year && p.Month == month && p.HouseholdId == householdId, cancellationToken)
             ?? new MealPlan { Year = year, Month = month };
 
         var pantry = await db.PantryItems
             .AsNoTracking()
+            .Where(p => p.HouseholdId == householdId)
             .Include(p => p.Ingredient)
             .ToListAsync(cancellationToken);
 
         var prices = await db.IngredientPrices
             .AsNoTracking()
+            .Where(p => p.HouseholdId == householdId)
             .Include(p => p.Store)
             .ToListAsync(cancellationToken);
 

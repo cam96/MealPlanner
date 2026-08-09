@@ -1,3 +1,4 @@
+using MealPlanner.Api.Household;
 using MealPlanner.Api.Mapping;
 using MealPlanner.Contracts.Combos;
 using MealPlanner.Data;
@@ -32,20 +33,24 @@ public static class CombosEndpoints
         return app;
     }
 
-    private static async Task<Ok<CategoryBoardDto>> GetBoardAsync(
+    private static async Task<IResult> GetBoardAsync(
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var ingredients = await db.Ingredients
             .AsNoTracking()
-            .Where(i => i.Category != FoodCategory.None)
+            .Where(i => i.HouseholdId == householdId && i.Category != FoodCategory.None)
             .OrderBy(i => i.Name)
             .ToListAsync(cancellationToken);
 
         var ids = ingredients.Select(i => i.Id).ToList();
         var stock = await db.PantryItems
             .AsNoTracking()
-            .Where(p => ids.Contains(p.IngredientId))
+            .Where(p => p.HouseholdId == householdId && ids.Contains(p.IngredientId))
             .ToListAsync(cancellationToken);
 
         var stockByIngredient = stock
@@ -74,12 +79,17 @@ public static class CombosEndpoints
         return TypedResults.Ok(board);
     }
 
-    private static async Task<Ok<IReadOnlyList<MealComboDto>>> GetAllAsync(
+    private static async Task<IResult> GetAllAsync(
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var combos = await db.MealCombos
             .AsNoTracking()
+            .Where(c => c.HouseholdId == householdId)
             .Include(c => c.ProteinIngredient)
             .Include(c => c.CarbohydrateIngredient)
             .Include(c => c.VegetableIngredient)
@@ -90,17 +100,21 @@ public static class CombosEndpoints
         return TypedResults.Ok<IReadOnlyList<MealComboDto>>(combos);
     }
 
-    private static async Task<Results<Created<MealComboDto>, ValidationProblem>> CreateAsync(
+    private static async Task<IResult> CreateAsync(
         SaveMealComboRequest request,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         if (await ValidateAsync(request, db, cancellationToken) is { } errors)
         {
             return TypedResults.ValidationProblem(errors);
         }
 
-        var combo = new MealCombo { Name = request.Name.Trim() };
+        var combo = new MealCombo { Name = request.Name.Trim(), HouseholdId = householdId };
         combo.Apply(request);
         db.MealCombos.Add(combo);
         await db.SaveChangesAsync(cancellationToken);
@@ -109,13 +123,17 @@ public static class CombosEndpoints
         return TypedResults.Created($"/api/combos/{combo.Id}", saved.ToDto());
     }
 
-    private static async Task<Results<Ok<MealComboDto>, NotFound, ValidationProblem>> UpdateAsync(
+    private static async Task<IResult> UpdateAsync(
         int id,
         SaveMealComboRequest request,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
-        var combo = await db.MealCombos.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
+        var combo = await db.MealCombos.FirstOrDefaultAsync(c => c.Id == id && c.HouseholdId == householdId, cancellationToken);
         if (combo is null)
         {
             return TypedResults.NotFound();
@@ -133,12 +151,16 @@ public static class CombosEndpoints
         return TypedResults.Ok(saved.ToDto());
     }
 
-    private static async Task<Results<NoContent, NotFound, BadRequest<string>>> DeleteAsync(
+    private static async Task<IResult> DeleteAsync(
         int id,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
-        var combo = await db.MealCombos.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
+        var combo = await db.MealCombos.FirstOrDefaultAsync(c => c.Id == id && c.HouseholdId == householdId, cancellationToken);
         if (combo is null)
         {
             return TypedResults.NotFound();

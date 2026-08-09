@@ -1,3 +1,4 @@
+using MealPlanner.Api.Household;
 using MealPlanner.Api.Mapping;
 using MealPlanner.Contracts.Recipes;
 using MealPlanner.Data;
@@ -31,12 +32,17 @@ public static class RecipesEndpoints
         return app;
     }
 
-    private static async Task<Ok<IReadOnlyList<RecipeSummaryDto>>> GetAllAsync(
+    private static async Task<IResult> GetAllAsync(
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var recipes = await db.Recipes
             .AsNoTracking()
+            .Where(r => r.HouseholdId == householdId)
             .Include(r => r.Ingredients)
             .ThenInclude(ri => ri.Ingredient)
             .OrderBy(r => r.Name)
@@ -51,16 +57,20 @@ public static class RecipesEndpoints
         return TypedResults.Ok<IReadOnlyList<RecipeSummaryDto>>(summaries);
     }
 
-    private static async Task<Results<Ok<RecipeDto>, NotFound>> GetByIdAsync(
+    private static async Task<IResult> GetByIdAsync(
         int id,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var recipe = await db.Recipes
             .AsNoTracking()
             .Include(r => r.Ingredients)
             .ThenInclude(ri => ri.Ingredient)
-            .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(r => r.Id == id && r.HouseholdId == householdId, cancellationToken);
 
         if (recipe is null)
         {
@@ -71,17 +81,21 @@ public static class RecipesEndpoints
         return TypedResults.Ok(dto);
     }
 
-    private static async Task<Results<Created<RecipeDto>, ValidationProblem>> CreateAsync(
+    private static async Task<IResult> CreateAsync(
         SaveRecipeRequest request,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         if (await ValidateAsync(request, db, cancellationToken) is { } errors)
         {
             return TypedResults.ValidationProblem(errors);
         }
 
-        var recipe = new Recipe { Name = request.Name.Trim() };
+        var recipe = new Recipe { Name = request.Name.Trim(), HouseholdId = householdId };
         recipe.Apply(request);
 
         db.Recipes.Add(recipe);
@@ -92,15 +106,19 @@ public static class RecipesEndpoints
         return TypedResults.Created($"/api/recipes/{recipe.Id}", dto);
     }
 
-    private static async Task<Results<Ok<RecipeDto>, NotFound, ValidationProblem>> UpdateAsync(
+    private static async Task<IResult> UpdateAsync(
         int id,
         SaveRecipeRequest request,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var recipe = await db.Recipes
             .Include(r => r.Ingredients)
-            .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(r => r.Id == id && r.HouseholdId == householdId, cancellationToken);
         if (recipe is null)
         {
             return TypedResults.NotFound();
@@ -119,12 +137,16 @@ public static class RecipesEndpoints
         return TypedResults.Ok(dto);
     }
 
-    private static async Task<Results<NoContent, NotFound>> DeleteAsync(
+    private static async Task<IResult> DeleteAsync(
         int id,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
-        var recipe = await db.Recipes.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
+        var recipe = await db.Recipes.FirstOrDefaultAsync(r => r.Id == id && r.HouseholdId == householdId, cancellationToken);
         if (recipe is null)
         {
             return TypedResults.NotFound();

@@ -1,3 +1,4 @@
+using MealPlanner.Api.Household;
 using MealPlanner.Api.Mapping;
 using MealPlanner.Contracts.Shopping;
 using MealPlanner.Data;
@@ -34,12 +35,16 @@ public static class ShoppingEndpoints
         return app;
     }
 
-    private static async Task<Results<Ok<ShoppingListDto>, ValidationProblem>> GetAsync(
+    private static async Task<IResult> GetAsync(
         int year,
         int month,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         if (month is < 1 or > 12 || year is < 1 or > 9999)
         {
             return TypedResults.ValidationProblem(new Dictionary<string, string[]>
@@ -48,13 +53,13 @@ public static class ShoppingEndpoints
             });
         }
 
-        var budget = await SettingsEndpoints.GetMonthlyBudgetAsync(db, cancellationToken);
+        var budget = await SettingsEndpoints.GetMonthlyBudgetAsync(db, householdId, cancellationToken);
 
         // Load manual items for this month with their linked ingredients.
         var manualEntities = await db.ManualShoppingItems
             .AsNoTracking()
             .Include(m => m.Ingredient)
-            .Where(m => m.Year == year && m.Month == month)
+            .Where(m => m.HouseholdId == householdId && m.Year == year && m.Month == month)
             .OrderBy(m => m.CreatedAt)
             .ToListAsync(cancellationToken);
 
@@ -184,13 +189,17 @@ public static class ShoppingEndpoints
             .ThenByDescending(p => p.RecordedDate)
             .FirstOrDefault();
 
-    private static async Task<Results<Created<ManualShoppingItemDto>, ValidationProblem>> AddManualItemAsync(
+    private static async Task<IResult> AddManualItemAsync(
         int year,
         int month,
         AddManualShoppingItemRequest request,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var errors = new Dictionary<string, string[]>();
 
         if (month is < 1 or > 12 || year is < 1 or > 9999)
@@ -223,6 +232,7 @@ public static class ShoppingEndpoints
         {
             Year = year,
             Month = month,
+            HouseholdId = householdId,
             CreatedAt = DateTime.UtcNow,
         };
         item.Apply(request);
@@ -254,16 +264,20 @@ public static class ShoppingEndpoints
             item.ToDto(prices: itemPrices));
     }
 
-    private static async Task<Results<Ok<ManualShoppingItemDto>, NotFound, ValidationProblem>> UpdateManualItemAsync(
+    private static async Task<IResult> UpdateManualItemAsync(
         int year,
         int month,
         int id,
         AddManualShoppingItemRequest request,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var item = await db.ManualShoppingItems
-            .FirstOrDefaultAsync(m => m.Id == id && m.Year == year && m.Month == month, cancellationToken);
+            .FirstOrDefaultAsync(m => m.Id == id && m.Year == year && m.Month == month && m.HouseholdId == householdId, cancellationToken);
 
         if (item is null)
         {
@@ -299,15 +313,19 @@ public static class ShoppingEndpoints
         return TypedResults.Ok(item.ToDto());
     }
 
-    private static async Task<Results<NoContent, NotFound>> DeleteManualItemAsync(
+    private static async Task<IResult> DeleteManualItemAsync(
         int year,
         int month,
         int id,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var item = await db.ManualShoppingItems
-            .FirstOrDefaultAsync(m => m.Id == id && m.Year == year && m.Month == month, cancellationToken);
+            .FirstOrDefaultAsync(m => m.Id == id && m.Year == year && m.Month == month && m.HouseholdId == householdId, cancellationToken);
 
         if (item is null)
         {
@@ -320,15 +338,19 @@ public static class ShoppingEndpoints
         return TypedResults.NoContent();
     }
 
-    private static async Task<Results<Ok<ManualShoppingItemDto>, NotFound>> ToggleManualItemCartAsync(
+    private static async Task<IResult> ToggleManualItemCartAsync(
         int year,
         int month,
         int id,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var item = await db.ManualShoppingItems
-            .FirstOrDefaultAsync(m => m.Id == id && m.Year == year && m.Month == month, cancellationToken);
+            .FirstOrDefaultAsync(m => m.Id == id && m.Year == year && m.Month == month && m.HouseholdId == householdId, cancellationToken);
 
         if (item is null)
         {
@@ -341,15 +363,19 @@ public static class ShoppingEndpoints
         return TypedResults.Ok(item.ToDto());
     }
 
-    private static async Task<NoContent> ClearCartAsync(
+    private static async Task<IResult> ClearCartAsync(
         int year,
         int month,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         // Remove manual items that are in the cart (they've been purchased).
         await db.ManualShoppingItems
-            .Where(m => m.Year == year && m.Month == month && m.IsInCart)
+            .Where(m => m.HouseholdId == householdId && m.Year == year && m.Month == month && m.IsInCart)
             .ExecuteDeleteAsync(cancellationToken);
 
         return TypedResults.NoContent();

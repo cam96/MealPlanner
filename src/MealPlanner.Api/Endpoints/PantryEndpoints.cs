@@ -1,3 +1,4 @@
+using MealPlanner.Api.Household;
 using MealPlanner.Api.Mapping;
 using MealPlanner.Contracts.Pantry;
 using MealPlanner.Data;
@@ -29,12 +30,17 @@ public static class PantryEndpoints
         return app;
     }
 
-    private static async Task<Ok<IReadOnlyList<PantryItemDto>>> GetAllAsync(
+    private static async Task<IResult> GetAllAsync(
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var items = await db.PantryItems
             .AsNoTracking()
+            .Where(p => p.HouseholdId == householdId)
             .Include(p => p.Ingredient)
             .OrderBy(p => p.Location)
             .ThenBy(p => p.Ingredient!.Name)
@@ -44,30 +50,38 @@ public static class PantryEndpoints
         return TypedResults.Ok<IReadOnlyList<PantryItemDto>>(items);
     }
 
-    private static async Task<Results<Ok<PantryItemDto>, NotFound>> GetByIdAsync(
+    private static async Task<IResult> GetByIdAsync(
         int id,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var item = await db.PantryItems
             .AsNoTracking()
             .Include(p => p.Ingredient)
-            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(p => p.Id == id && p.HouseholdId == householdId, cancellationToken);
 
         return item is null ? TypedResults.NotFound() : TypedResults.Ok(item.ToDto());
     }
 
-    private static async Task<Results<Created<PantryItemDto>, ValidationProblem>> CreateAsync(
+    private static async Task<IResult> CreateAsync(
         SavePantryItemRequest request,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         if (await ValidateAsync(request, db, cancellationToken) is { } errors)
         {
             return TypedResults.ValidationProblem(errors);
         }
 
-        var item = new PantryItem();
+        var item = new PantryItem { HouseholdId = householdId };
         item.Apply(request);
 
         db.PantryItems.Add(item);
@@ -77,13 +91,17 @@ public static class PantryEndpoints
         return TypedResults.Created($"/api/pantry/{item.Id}", saved.ToDto());
     }
 
-    private static async Task<Results<Ok<PantryItemDto>, NotFound, ValidationProblem>> UpdateAsync(
+    private static async Task<IResult> UpdateAsync(
         int id,
         SavePantryItemRequest request,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
-        var item = await db.PantryItems.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
+        var item = await db.PantryItems.FirstOrDefaultAsync(p => p.Id == id && p.HouseholdId == householdId, cancellationToken);
         if (item is null)
         {
             return TypedResults.NotFound();
@@ -101,12 +119,16 @@ public static class PantryEndpoints
         return TypedResults.Ok(saved.ToDto());
     }
 
-    private static async Task<Results<NoContent, NotFound>> DeleteAsync(
+    private static async Task<IResult> DeleteAsync(
         int id,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
-        var item = await db.PantryItems.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
+        var item = await db.PantryItems.FirstOrDefaultAsync(p => p.Id == id && p.HouseholdId == householdId, cancellationToken);
         if (item is null)
         {
             return TypedResults.NotFound();

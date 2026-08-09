@@ -1,3 +1,4 @@
+using MealPlanner.Api.Household;
 using MealPlanner.Api.Mapping;
 using MealPlanner.Contracts.Planning;
 using MealPlanner.Data;
@@ -30,12 +31,16 @@ public static class PlannerEndpoints
         return app;
     }
 
-    private static async Task<Results<Ok<MealPlanDto>, ValidationProblem>> GetMonthAsync(
+    private static async Task<IResult> GetMonthAsync(
         int year,
         int month,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         if (month is < 1 or > 12 || year is < 1 or > 9999)
         {
             return TypedResults.ValidationProblem(new Dictionary<string, string[]>
@@ -45,11 +50,11 @@ public static class PlannerEndpoints
         }
 
         var plan = await db.MealPlans
-            .FirstOrDefaultAsync(p => p.Year == year && p.Month == month, cancellationToken);
+            .FirstOrDefaultAsync(p => p.Year == year && p.Month == month && p.HouseholdId == householdId, cancellationToken);
 
         if (plan is null)
         {
-            plan = new MealPlan { Year = year, Month = month };
+            plan = new MealPlan { Year = year, Month = month, HouseholdId = householdId };
             var days = DateTime.DaysInMonth(year, month);
             for (var day = 1; day <= days; day++)
             {
@@ -61,18 +66,24 @@ public static class PlannerEndpoints
         }
 
         var loaded = await LoadPlanAsync(db, plan.Id, cancellationToken);
-        var people = await db.People.AsNoTracking().ToListAsync(cancellationToken);
+        var people = await db.People.AsNoTracking().Where(p => p.HouseholdId == householdId).ToListAsync(cancellationToken);
 
         return TypedResults.Ok(BuildDto(loaded, people));
     }
 
-    private static async Task<Results<Ok<MealPlanDto>, NotFound, ValidationProblem>> UpdateDayAsync(
+    private static async Task<IResult> UpdateDayAsync(
         int dayId,
         SaveDayRequest request,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
-        var day = await db.DayPlans.FirstOrDefaultAsync(d => d.Id == dayId, cancellationToken);
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
+        var day = await db.DayPlans
+            .Include(d => d.MealPlan)
+            .FirstOrDefaultAsync(d => d.Id == dayId && d.MealPlan!.HouseholdId == householdId, cancellationToken);
         if (day is null)
         {
             return TypedResults.NotFound();
@@ -82,16 +93,22 @@ public static class PlannerEndpoints
         day.Note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
         await db.SaveChangesAsync(cancellationToken);
 
-        return await ReturnPlanAsync(db, day.MealPlanId, cancellationToken);
+        return await ReturnPlanAsync(db, day.MealPlanId, householdId, cancellationToken);
     }
 
-    private static async Task<Results<Ok<MealPlanDto>, NotFound, ValidationProblem>> AddMealAsync(
+    private static async Task<IResult> AddMealAsync(
         int dayId,
         SavePlannedMealRequest request,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
-        var day = await db.DayPlans.FirstOrDefaultAsync(d => d.Id == dayId, cancellationToken);
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
+        var day = await db.DayPlans
+            .Include(d => d.MealPlan)
+            .FirstOrDefaultAsync(d => d.Id == dayId && d.MealPlan!.HouseholdId == householdId, cancellationToken);
         if (day is null)
         {
             return TypedResults.NotFound();
@@ -107,18 +124,23 @@ public static class PlannerEndpoints
         db.PlannedMeals.Add(meal);
         await db.SaveChangesAsync(cancellationToken);
 
-        return await ReturnPlanAsync(db, day.MealPlanId, cancellationToken);
+        return await ReturnPlanAsync(db, day.MealPlanId, householdId, cancellationToken);
     }
 
-    private static async Task<Results<Ok<MealPlanDto>, NotFound, ValidationProblem>> UpdateMealAsync(
+    private static async Task<IResult> UpdateMealAsync(
         int mealId,
         SavePlannedMealRequest request,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var meal = await db.PlannedMeals
             .Include(m => m.DayPlan)
-            .FirstOrDefaultAsync(m => m.Id == mealId, cancellationToken);
+                .ThenInclude(d => d!.MealPlan)
+            .FirstOrDefaultAsync(m => m.Id == mealId && m.DayPlan!.MealPlan!.HouseholdId == householdId, cancellationToken);
         if (meal is null)
         {
             return TypedResults.NotFound();
@@ -132,17 +154,22 @@ public static class PlannerEndpoints
         meal.Apply(request);
         await db.SaveChangesAsync(cancellationToken);
 
-        return await ReturnPlanAsync(db, meal.DayPlan!.MealPlanId, cancellationToken);
+        return await ReturnPlanAsync(db, meal.DayPlan!.MealPlanId, householdId, cancellationToken);
     }
 
-    private static async Task<Results<Ok<MealPlanDto>, NotFound, ValidationProblem>> DeleteMealAsync(
+    private static async Task<IResult> DeleteMealAsync(
         int mealId,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var meal = await db.PlannedMeals
             .Include(m => m.DayPlan)
-            .FirstOrDefaultAsync(m => m.Id == mealId, cancellationToken);
+                .ThenInclude(d => d!.MealPlan)
+            .FirstOrDefaultAsync(m => m.Id == mealId && m.DayPlan!.MealPlan!.HouseholdId == householdId, cancellationToken);
         if (meal is null)
         {
             return TypedResults.NotFound();
@@ -152,16 +179,17 @@ public static class PlannerEndpoints
         db.PlannedMeals.Remove(meal);
         await db.SaveChangesAsync(cancellationToken);
 
-        return await ReturnPlanAsync(db, planId, cancellationToken);
+        return await ReturnPlanAsync(db, planId, householdId, cancellationToken);
     }
 
-    private static async Task<Results<Ok<MealPlanDto>, NotFound, ValidationProblem>> ReturnPlanAsync(
+    private static async Task<IResult> ReturnPlanAsync(
         MealPlannerDbContext db,
         int planId,
+        int householdId,
         CancellationToken cancellationToken)
     {
         var loaded = await LoadPlanAsync(db, planId, cancellationToken);
-        var people = await db.People.AsNoTracking().ToListAsync(cancellationToken);
+        var people = await db.People.AsNoTracking().Where(p => p.HouseholdId == householdId).ToListAsync(cancellationToken);
         return TypedResults.Ok(BuildDto(loaded, people));
     }
 

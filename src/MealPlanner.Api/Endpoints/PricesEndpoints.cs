@@ -1,3 +1,4 @@
+using MealPlanner.Api.Household;
 using MealPlanner.Api.Mapping;
 using MealPlanner.Contracts.Prices;
 using MealPlanner.Data;
@@ -31,12 +32,16 @@ public static class PricesEndpoints
         return app;
     }
 
-    private static async Task<Results<Ok<IReadOnlyList<IngredientPriceDto>>, NotFound>> GetAllAsync(
+    private static async Task<IResult> GetAllAsync(
         int ingredientId,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
-        var ingredientExists = await db.Ingredients.AnyAsync(i => i.Id == ingredientId, cancellationToken);
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
+        var ingredientExists = await db.Ingredients.AnyAsync(i => i.Id == ingredientId && i.HouseholdId == householdId, cancellationToken);
         if (!ingredientExists)
         {
             return TypedResults.NotFound();
@@ -44,7 +49,7 @@ public static class PricesEndpoints
 
         var prices = await db.IngredientPrices
             .AsNoTracking()
-            .Where(p => p.IngredientId == ingredientId)
+            .Where(p => p.IngredientId == ingredientId && p.HouseholdId == householdId)
             .Include(p => p.Store)
             .OrderByDescending(p => p.RecordedDate)
             .Select(p => p.ToDto())
@@ -53,24 +58,28 @@ public static class PricesEndpoints
         return TypedResults.Ok<IReadOnlyList<IngredientPriceDto>>(prices);
     }
 
-    private static async Task<Results<Created<IngredientPriceDto>, NotFound, ValidationProblem>> CreateAsync(
+    private static async Task<IResult> CreateAsync(
         int ingredientId,
         SaveIngredientPriceRequest request,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
-        var ingredientExists = await db.Ingredients.AnyAsync(i => i.Id == ingredientId, cancellationToken);
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
+        var ingredientExists = await db.Ingredients.AnyAsync(i => i.Id == ingredientId && i.HouseholdId == householdId, cancellationToken);
         if (!ingredientExists)
         {
             return TypedResults.NotFound();
         }
 
-        if (await ValidateAsync(request, db, cancellationToken) is { } errors)
+        if (await ValidateAsync(request, db, householdId, cancellationToken) is { } errors)
         {
             return TypedResults.ValidationProblem(errors);
         }
 
-        var price = new IngredientPrice { IngredientId = ingredientId };
+        var price = new IngredientPrice { IngredientId = ingredientId, HouseholdId = householdId };
         price.Apply(request);
 
         db.IngredientPrices.Add(price);
@@ -83,22 +92,26 @@ public static class PricesEndpoints
             price.ToDto());
     }
 
-    private static async Task<Results<Ok<IngredientPriceDto>, NotFound, ValidationProblem>> UpdateAsync(
+    private static async Task<IResult> UpdateAsync(
         int ingredientId,
         int priceId,
         SaveIngredientPriceRequest request,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var price = await db.IngredientPrices
             .Include(p => p.Store)
-            .FirstOrDefaultAsync(p => p.Id == priceId && p.IngredientId == ingredientId, cancellationToken);
+            .FirstOrDefaultAsync(p => p.Id == priceId && p.IngredientId == ingredientId && p.HouseholdId == householdId, cancellationToken);
         if (price is null)
         {
             return TypedResults.NotFound();
         }
 
-        if (await ValidateAsync(request, db, cancellationToken) is { } errors)
+        if (await ValidateAsync(request, db, householdId, cancellationToken) is { } errors)
         {
             return TypedResults.ValidationProblem(errors);
         }
@@ -111,14 +124,18 @@ public static class PricesEndpoints
         return TypedResults.Ok(price.ToDto());
     }
 
-    private static async Task<Results<NoContent, NotFound>> DeleteAsync(
+    private static async Task<IResult> DeleteAsync(
         int ingredientId,
         int priceId,
+        HouseholdContext context,
         MealPlannerDbContext db,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var price = await db.IngredientPrices
-            .FirstOrDefaultAsync(p => p.Id == priceId && p.IngredientId == ingredientId, cancellationToken);
+            .FirstOrDefaultAsync(p => p.Id == priceId && p.IngredientId == ingredientId && p.HouseholdId == householdId, cancellationToken);
         if (price is null)
         {
             return TypedResults.NotFound();
@@ -130,16 +147,21 @@ public static class PricesEndpoints
         return TypedResults.NoContent();
     }
 
-    private static async Task<Ok<IReadOnlyList<RecentPriceDto>>> GetRecentAsync(
+    private static async Task<IResult> GetRecentAsync(
+        HouseholdContext context,
         MealPlannerDbContext db,
         string? q,
         int? limit,
         CancellationToken cancellationToken)
     {
+        var (householdId, error) = await context.RequireHouseholdAsync(cancellationToken);
+        if (error is not null) return error;
+
         var take = limit is > 0 ? Math.Min(limit.Value, 100) : 50;
 
         var query = db.IngredientPrices
             .AsNoTracking()
+            .Where(p => p.HouseholdId == householdId)
             .Include(p => p.Store)
             .Include(p => p.Ingredient)
             .AsQueryable();
@@ -174,11 +196,12 @@ public static class PricesEndpoints
     private static async Task<IDictionary<string, string[]>?> ValidateAsync(
         SaveIngredientPriceRequest request,
         MealPlannerDbContext db,
+        int householdId,
         CancellationToken cancellationToken)
     {
         var errors = new Dictionary<string, string[]>();
 
-        var storeExists = await db.Stores.AnyAsync(s => s.Id == request.StoreId, cancellationToken);
+        var storeExists = await db.Stores.AnyAsync(s => s.Id == request.StoreId && s.HouseholdId == householdId, cancellationToken);
         if (!storeExists)
         {
             errors[nameof(request.StoreId)] = ["The selected store does not exist."];
