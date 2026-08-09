@@ -19,7 +19,7 @@ public static class DashboardEndpoints
         ArgumentNullException.ThrowIfNull(app);
 
         app.MapGet("/api/plans/{year:int}/{month:int}/dashboard", GetAsync)
-            .WithTags("Dashboard");
+            .WithTags("Dashboard").RequireAuthorization();
 
         return app;
     }

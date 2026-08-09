@@ -127,5 +127,78 @@ flowchart LR
 - Schema changes use EF Core **migrations** only (never `EnsureCreated`), with an
   **expand/contract** approach for destructive changes.
 
+## Authentication & authorization
+
+The app requires authentication for all user-facing pages and API endpoints.
+
+### Flow
+
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant CF as Cloudflare (TLS + WAF)
+    participant Caddy as Caddy (reverse proxy)
+    participant Web as MealPlanner.Web
+    participant Google as Google OAuth
+    participant Api as MealPlanner.Api
+
+    Note over Browser,CF: User browses to https://mealplanner.cameronmckay.ca
+    Browser->>CF: HTTPS request
+    CF->>CF: Terminate public TLS, apply WAF/security rules
+    CF->>Caddy: Re-encrypt with Origin Certificate + client cert (Authenticated Origin Pull)
+    Caddy->>Caddy: Verify Cloudflare client cert against Origin Pull CA
+    Caddy->>Web: Forward request (HTTP, internal Docker network)
+
+    Note over Browser,Web: First visit — unauthenticated
+    Web-->>Browser: Redirect to /login (via Caddy → CF)
+    Browser->>Web: Click "Sign in with Google" (via CF → Caddy)
+    Web->>Google: OAuth challenge
+    Google-->>Web: ID token + user info
+    Web-->>Browser: Set auth cookie, redirect home
+
+    Note over Browser,Api: Authenticated request
+    Browser->>CF: HTTPS request (with cookie)
+    CF->>Caddy: Origin Pull (client cert verified)
+    Caddy->>Web: Forward to Web
+    Web->>Web: Generate JWT (HMAC-SHA256, shared key)
+    Web->>Api: API call + Authorization: Bearer <JWT>
+    Api->>Api: Validate JWT signature & claims
+    Api-->>Web: Response
+    Web-->>Browser: Rendered page (via Caddy → CF)
+```
+
+### Components
+
+| Component | Mechanism | Details |
+| --- | --- | --- |
+| Cloudflare | TLS termination + WAF | Public TLS for visitors; security rules, DDoS protection |
+| Caddy | Reverse proxy (port 443) | Origin Certificate for Cloudflare ↔ origin TLS; verifies Cloudflare client cert (Authenticated Origin Pulls) |
+| Web login | Google OAuth 2.0 | ASP.NET Core cookie auth + Google external provider |
+| Web session | Cookie | 1-hour sliding expiration |
+| API auth | JWT Bearer | Validates issuer=`MealPlanner.Web`, audience=`MealPlanner.Api`, HMAC-SHA256 |
+| Signing key | Shared secret | Passed to both services via Aspire parameters |
+| Token lifetime | 1 hour | Sliding expiration; activity resets the window |
+
+### JWT issuer and audience
+
+The JWT contains two identity claims that the API validates on every request:
+
+- **Issuer (`iss`: `MealPlanner.Web`)** — identifies who created the token. The API only accepts
+  tokens issued by the Web service. This prevents tokens from untrusted sources being accepted.
+- **Audience (`aud`: `MealPlanner.Api`)** — identifies who the token is intended for. The API only
+  accepts tokens explicitly addressed to it. This prevents a token meant for a different service
+  from being replayed against the API.
+
+The Web stamps both claims when generating the token; the API rejects the token if either value
+doesn't match. In a single-API deployment this is defense-in-depth — it becomes critical if a
+second service is ever added that shares the same signing key but should not share access.
+
+### Anonymous endpoints
+
+- `/ping` — readiness probe (API)
+- `/health`, `/alive` — health checks (both services)
+- `/login` — login page (Web)
+- `/auth/login`, `/auth/logout` — OAuth flow endpoints (Web)
+
 > Keep this document updated as the architecture evolves; it is referenced from the README and the
 > project-wide Copilot instructions.

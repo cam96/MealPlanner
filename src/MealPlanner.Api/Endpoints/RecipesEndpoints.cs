@@ -19,7 +19,7 @@ public static class RecipesEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/recipes").WithTags("Recipes");
+        var group = app.MapGroup("/api/recipes").WithTags("Recipes").RequireAuthorization();
 
         group.MapGet("/", GetAllAsync);
         group.MapGet("/{id:int}", GetByIdAsync);

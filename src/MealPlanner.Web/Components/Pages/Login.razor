@@ -1,0 +1,42 @@
+@page "/login"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+
+<PageTitle>Login - MealPlanner</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraSmall" Class="d-flex align-center justify-center" Style="min-height: 80vh;">
+    <MudCard Elevation="4" Class="pa-8" Style="width: 100%;">
+        <MudCardContent Class="d-flex flex-column align-center gap-4">
+            <MudIcon Icon="@Icons.Material.Filled.Restaurant" Color="Color.Primary"
+                     Style="font-size: 4rem;" />
+            <MudText Typo="Typo.h4" Align="Align.Center">MealPlanner</MudText>
+            <MudText Typo="Typo.body1" Align="Align.Center" Color="Color.Secondary">
+                Sign in to access your household meal planner.
+            </MudText>
+        </MudCardContent>
+        <MudCardActions Class="d-flex justify-center pa-4">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Size="Size.Large"
+                       StartIcon="@Icons.Material.Filled.Login"
+                       Href="@_loginUrl"
+                       Class="text-transform-none">
+                Sign in with Google
+            </MudButton>
+        </MudCardActions>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private string _loginUrl = "/auth/login";
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (!string.IsNullOrEmpty(ReturnUrl))
+        {
+            _loginUrl = $"/auth/login?returnUrl={Uri.EscapeDataString(ReturnUrl)}";
+        }
+    }
+}
